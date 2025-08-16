@@ -447,6 +447,28 @@ void Cmd_Score3_f (edict_t *ent)
 	BestTimesScoreboardGlobal (ent);
 }
 
+void Cmd_Score4_f (edict_t *ent) // hax for replay stats to piggy back this scoreboard unicast system
+{
+	ent->client->showinventory = false;
+	ent->client->showhelp = false;
+//ZOID
+	if (ent->client->menu)
+		PMenu_Close(ent);
+//ZOID
+
+	if (!deathmatch->value && !coop->value)
+		return;
+
+	if (ent->client->showscores >=4)
+	{
+		ent->client->showscores = 0;
+		ent->client->update_chase = true;
+		return;
+	}
+
+	ent->client->showscores = 4;
+}
+
 /*
 ==================
 HelpComputer

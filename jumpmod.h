@@ -3,7 +3,7 @@
 //defines
 #define MAX_USERS 2048 //reduced from 4096 to save memory
 #define MAX_HIGHSCORES 15
-#define CTF_VERSION_S		"1.47global"
+#define CTF_VERSION_S		"1.482global"
 #define		HOOK_READY	0
 #define		HOOK_OUT	1
 #define		HOOK_ON		2
@@ -151,10 +151,11 @@ typedef struct
 
 typedef struct
 {
-	vec3_t		angle;
-	vec3_t		origin;
+	vec3_t angle;
+	vec3_t origin;
 #ifdef ANIM_REPLAY
-	int			frame;
+	int frame;
+	//short cur_speed;
 #endif
 } record_data;
 
@@ -433,6 +434,7 @@ typedef struct
 	int ghost_model;
 	int gravity;
 	int health;
+	int hyperblaster;
 	int lap_total;
 	int quad_damage;
 	int regen;
@@ -725,6 +727,7 @@ qboolean ValidateMap (char *mapname); // updated to try and download a missing m
 #define MIN_REPLAY_SPEED 0
 #define REPLAY_SPEED_ZERO 9
 #define REPLAY_SPEED_ONE  13
+#define REPLAY_STATS_MIN_SPEED 5
 
 static const double replay_speed_modifier[] =  
 {-100, -25, -10, -5, -2, -1, -0.5, -0.2, -0.1, 0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 25, 100};
@@ -805,9 +808,9 @@ void reset_maps_completed(edict_t *ent);
 #define RECORD_KEY_FORWARD 16 << RECORD_KEY_SHIFT
 #define RECORD_KEY_BACK    32 << RECORD_KEY_SHIFT
 #define RECORD_KEY_ATTACK  64 << RECORD_KEY_SHIFT
-
 #define RECORD_FPS_SHIFT    8
 #define RECORD_FPS_MASK   255 << RECORD_FPS_SHIFT
+
 void Update_Added_Time(void);
 void Update_Highscores(int start);
 void Highlight_Name(char *name);

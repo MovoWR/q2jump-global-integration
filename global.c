@@ -1,7 +1,7 @@
 /*
 Global Server Integration
 Author: Grish
-Version: 1.47global
+Version: 1.482global
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -171,15 +171,16 @@ void Download_Remote_Mapents(char *mapname)
 	//download mapsent..
 	sprintf(args[0].filename, "%s/mapsent/%s.ent", tgame->string, mapname);
 	sprintf(args[0].url, "%s/mapsent/%s.ent", gset_vars->global_ents_url, urlencoded_mapname);
-	pthread_create(&tid[0],NULL,HTTP_Get_File_MT,(void *)&args[0]);
 	//download mapname.cfg
 	sprintf(args[1].filename, "%s/ent/%s.cfg", tgame->string, mapname);
 	sprintf(args[1].url, "%s/ent/%s.cfg", gset_vars->global_ents_url, urlencoded_mapname);
-	pthread_create(&tid[1],NULL,HTTP_Get_File_MT,(void *)&args[1]);
 	//download mapname.add
 	sprintf(args[2].filename, "%s/ent/%s.add", tgame->string, mapname);
 	sprintf(args[2].url, "%s/ent/%s.add", gset_vars->global_ents_url, urlencoded_mapname);
-	pthread_create(&tid[2],NULL,HTTP_Get_File_MT,(void *)&args[2]);
+	// create thread and sent to http get function
+	for (i=0; i<3; i++) {
+		pthread_create(&tid[i],NULL,HTTP_Get_File_MT,(void *)&args[i]);
+	}
 	// clean up curl
 	if (tmp_curl) {
 		curl_free(urlencoded_mapname);
@@ -191,7 +192,6 @@ void Download_Remote_Mapents(char *mapname)
     	pthread_join(tid[i], NULL);
   	}
   	curl_global_cleanup();
-
 }
 
 /*
@@ -511,9 +511,9 @@ void Load_Remote_Recordings(int index_from)
 		rewind(f);
 
 		//load replay into it's respective slot
-		fread(level_items.recorded_time_data[MAX_HIGHSCORES + (i+1)], 1, lSize, f);		
-		level_items.recorded_time_frames[MAX_HIGHSCORES + (i+1)] = lSize / sizeof(record_data);	
-		fclose(f);		
+		fread(level_items.recorded_time_data[MAX_HIGHSCORES + (i+1)], 1, lSize, f);
+		level_items.recorded_time_frames[MAX_HIGHSCORES + (i+1)] = lSize / sizeof(record_data);
+		fclose(f);
 	}
 
 }
@@ -917,7 +917,7 @@ Sorts by lowest time asc
 Removes slowest duplicate player names
 ==============================
 */
-void Sort_Remote_Maptimes()
+/* void Sort_Remote_Maptimes()
 {
 	int i;
 	int j;
@@ -1034,12 +1034,400 @@ void Sort_Remote_Maptimes()
 		}
 	}
 	// lets print this sucker for testing...
-	/*for (i=0; i<60; i++)
+	//for (i=0; i<60; i++)
 	//{
 	//	gi.dprintf("sorted num: %d time: %f name: %s date: %s server: %s\n",i, sorted_remote_map_best_times[i].time,
 	//		sorted_remote_map_best_times[i].name,sorted_remote_map_best_times[i].date,sorted_remote_map_best_times[i].server);
-	}*/
+	//}
+} */
+
+/* int Compare_NameThenTime(const void *a, const void *b) {
+    const sorted_remote_map_best_times_record *ta = (const sorted_remote_map_best_times_record *)a;
+    const sorted_remote_map_best_times_record *tb = (const sorted_remote_map_best_times_record *)b;
+
+    int cmp = strcmp(ta->name, tb->name);
+    if (cmp != 0)
+        return cmp;  // sort by name first
+
+    // names are same, so sort by time ascending
+    if (ta->time < tb->time) return -1;
+    if (ta->time > tb->time) return 1;
+    return 0;
 }
+
+void Sort_Remote_Maptimes(void)
+{
+    int i, j;
+    int size = 0;
+
+    memset(sorted_remote_map_best_times, 0, sizeof(sorted_remote_map_best_times));
+
+    // Merge remote records
+    for (i = 0; i < MAX_REMOTE_HOSTS; i++) {
+        for (j = 0; j < MAX_HIGHSCORES; j++) {
+            if (remote_map_best_times[i][j].time > 0 && strlen(remote_map_best_times[i][j].name) > 0) {
+				sorted_remote_map_best_times[size].id = remote_map_best_times[i][j].id;
+				strcpy(sorted_remote_map_best_times[size].name, remote_map_best_times[i][j].name);
+				sorted_remote_map_best_times[size].time = remote_map_best_times[i][j].time;
+				strcpy(sorted_remote_map_best_times[size].date, remote_map_best_times[i][j].date);
+				sorted_remote_map_best_times[size].completions = remote_map_best_times[i][j].completions;
+				strcpy(sorted_remote_map_best_times[size].server, pGlobalHostName[i]);
+				strcpy(sorted_remote_map_best_times[size].replay_host_url, pGlobalHostUrl[i]);
+                size++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Merge local records
+    for (i = 0; i < MAX_HIGHSCORES; i++) {
+        if (level_items.stored_item_times[i].time > 0) {
+            sorted_remote_map_best_times[size].id = level_items.stored_item_times[i].uid;
+            strcpy(sorted_remote_map_best_times[size].name, level_items.stored_item_times[i].owner);
+            sorted_remote_map_best_times[size].time = level_items.stored_item_times[i].time;
+            sorted_remote_map_best_times[size].completions = tourney_record[i].completions;
+            strcpy(sorted_remote_map_best_times[size].date, level_items.stored_item_times[i].date);
+            strcpy(sorted_remote_map_best_times[size].server, gset_vars->global_localhost_name);
+            size++;
+        } else {
+            break;
+        }
+    }
+
+    // Sort by name, then time ascending
+    qsort(sorted_remote_map_best_times, size, sizeof(sorted_remote_map_best_times_record), Compare_NameThenTime);
+
+    // Deduplicate: only keep first occurrence of each name (which will be the best time)
+    int write_idx = 0;
+    for (i = 0; i < size; i++) {
+        if (i == 0 || strcmp(sorted_remote_map_best_times[i].name, sorted_remote_map_best_times[write_idx - 1].name) != 0) {
+            if (i != write_idx) {
+                sorted_remote_map_best_times[write_idx] = sorted_remote_map_best_times[i];
+            }
+            write_idx++;
+        }
+    }
+
+    // Zero out the rest
+    for (i = write_idx; i < size; i++) {
+        memset(&sorted_remote_map_best_times[i], 0, sizeof(sorted_remote_map_best_times_record));
+    }
+
+    // Now sorted_remote_map_best_times[0..write_idx-1] holds the final sorted, deduped top times
+} */
+
+/*
+// qsort by name ascending, then time then date ascending
+int Compare_NameThenTimeThenDate(const void *a, const void *b)
+{
+    const sorted_remote_map_best_times_record *recA = (const sorted_remote_map_best_times_record *)a;
+    const sorted_remote_map_best_times_record *recB = (const sorted_remote_map_best_times_record *)b;
+
+    int name_cmp = strcmp(recA->name, recB->name);
+    if (name_cmp != 0)
+        return name_cmp;
+
+    // Same name, compare time ascending
+    if (recA->time < recB->time)
+        return -1;
+    else if (recA->time > recB->time)
+        return 1;
+
+    // Same time, compare date ascending (oldest first)
+    int dayA, monthA, yearA;
+    int dayB, monthB, yearB;
+
+    sscanf(recA->date, "%2d/%2d/%2d", &dayA, &monthA, &yearA);
+    sscanf(recB->date, "%2d/%2d/%2d", &dayB, &monthB, &yearB);
+
+    yearA += (yearA < 70) ? 2000 : 1900;
+    yearB += (yearB < 70) ? 2000 : 1900;
+
+    if (yearA != yearB)
+        return (yearA < yearB) ? -1 : 1;
+    if (monthA != monthB)
+        return (monthA < monthB) ? -1 : 1;
+    if (dayA != dayB)
+        return (dayA < dayB) ? -1 : 1;
+
+    return 0;
+}
+
+
+// qsort by time date ascending
+int Compare_ByTimeThenDate(const void *a, const void *b)
+{
+    const sorted_remote_map_best_times_record *recA = (const sorted_remote_map_best_times_record *)a;
+    const sorted_remote_map_best_times_record *recB = (const sorted_remote_map_best_times_record *)b;
+
+    // First: sort by time ascending
+    if (recA->time < recB->time)
+        return -1;
+    else if (recA->time > recB->time)
+        return 1;
+
+    // If times are equal, sort by oldest date
+    // Parse format: DD/MM/YY
+    int dayA, monthA, yearA;
+    int dayB, monthB, yearB;
+
+    sscanf(recA->date, "%2d/%2d/%2d", &dayA, &monthA, &yearA);
+    sscanf(recB->date, "%2d/%2d/%2d", &dayB, &monthB, &yearB);
+
+    // Normalize year: assume 2-digit years mean 1900–2099
+    yearA += (yearA < 70) ? 2000 : 1900;
+    yearB += (yearB < 70) ? 2000 : 1900;
+
+    if (yearA != yearB)
+        return (yearA < yearB) ? -1 : 1;
+    if (monthA != monthB)
+        return (monthA < monthB) ? -1 : 1;
+    if (dayA != dayB)
+        return (dayA < dayB) ? -1 : 1;
+
+    // Same date and time — treat as equal
+    return 0;
+}
+
+
+void Sort_Remote_Maptimes(void)
+{
+    int i, j;
+    int size = 0;
+
+    memset(sorted_remote_map_best_times, 0, sizeof(sorted_remote_map_best_times));
+
+    // Merge remote records
+    for (i = 0; i < MAX_REMOTE_HOSTS; i++) {
+        for (j = 0; j < MAX_HIGHSCORES; j++) {
+            if (remote_map_best_times[i][j].time > 0 && strlen(remote_map_best_times[i][j].name) > 0) {
+                sorted_remote_map_best_times[size].id = remote_map_best_times[i][j].id;
+                strcpy(sorted_remote_map_best_times[size].name, remote_map_best_times[i][j].name);
+                sorted_remote_map_best_times[size].time = remote_map_best_times[i][j].time;
+                strcpy(sorted_remote_map_best_times[size].date, remote_map_best_times[i][j].date);
+                sorted_remote_map_best_times[size].completions = remote_map_best_times[i][j].completions;
+                strcpy(sorted_remote_map_best_times[size].server, pGlobalHostName[i]);
+                strcpy(sorted_remote_map_best_times[size].replay_host_url, pGlobalHostUrl[i]);
+                size++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Merge local records
+    for (i = 0; i < MAX_HIGHSCORES; i++) {
+        if (level_items.stored_item_times[i].time > 0) {
+            sorted_remote_map_best_times[size].id = level_items.stored_item_times[i].uid;
+            strcpy(sorted_remote_map_best_times[size].name, level_items.stored_item_times[i].owner);
+            sorted_remote_map_best_times[size].time = level_items.stored_item_times[i].time;
+            sorted_remote_map_best_times[size].completions = tourney_record[i].completions;
+            strcpy(sorted_remote_map_best_times[size].date, level_items.stored_item_times[i].date);
+            strcpy(sorted_remote_map_best_times[size].server, gset_vars->global_localhost_name);
+            size++;
+        } else {
+            break;
+        }
+    }
+
+    // Sort by name, then time then date
+    qsort(sorted_remote_map_best_times, size, sizeof(sorted_remote_map_best_times_record), Compare_NameThenTimeThenDate);
+
+    // Deduplicate by name (keep best time per name)
+    int write_idx = 0;
+    for (i = 0; i < size; i++) {
+        if (i == 0 || strcmp(sorted_remote_map_best_times[i].name, sorted_remote_map_best_times[write_idx - 1].name) != 0) {
+            if (i != write_idx) {
+                sorted_remote_map_best_times[write_idx] = sorted_remote_map_best_times[i];
+            }
+            write_idx++;
+        }
+    }
+
+    // Sort the deduplicated list by time and date ascending (final scoreboard order)
+    qsort(sorted_remote_map_best_times, write_idx, sizeof(sorted_remote_map_best_times_record), Compare_ByTimeThenDate);
+
+    // cleanup the rest
+    for (i = write_idx; i < size; i++) {
+        memset(&sorted_remote_map_best_times[i], 0, sizeof(sorted_remote_map_best_times_record));
+    }
+}
+*/
+
+
+// Comparator: time → date
+int Compare_ByTimeThenDate(const void *a, const void *b)
+{
+    const sorted_remote_map_best_times_record *recA = (const sorted_remote_map_best_times_record *)a;
+    const sorted_remote_map_best_times_record *recB = (const sorted_remote_map_best_times_record *)b;
+
+    if (recA->time < recB->time) return -1;
+    if (recA->time > recB->time) return 1;
+
+    int dA, mA, yA, dB, mB, yB;
+    if (sscanf(recA->date, "%2d/%2d/%2d", &dA, &mA, &yA) != 3 ||
+        sscanf(recB->date, "%2d/%2d/%2d", &dB, &mB, &yB) != 3)
+        return 0;
+
+    yA += (yA < 70) ? 2000 : 1900;
+    yB += (yB < 70) ? 2000 : 1900;
+
+    if (yA != yB) return (yA < yB) ? -1 : 1;
+    if (mA != mB) return (mA < mB) ? -1 : 1;
+    if (dA != dB) return (dA < dB) ? -1 : 1;
+
+    return 0;
+}
+
+void Sort_Remote_Maptimes(void)
+{
+
+	#ifdef _WIN32
+    	#define STRICMP _stricmp
+    #else
+        #define STRICMP strcasecmp
+    #endif
+
+    int i, j;
+    int size = 0;
+
+    memset(sorted_remote_map_best_times, 0, sizeof(sorted_remote_map_best_times));
+
+    // Merge remote scores
+    for (i = 0; i < MAX_REMOTE_HOSTS; i++) {
+        for (j = 0; j < MAX_HIGHSCORES; j++) {
+            if (remote_map_best_times[i][j].time > 0 && strlen(remote_map_best_times[i][j].name) > 0) {
+                sorted_remote_map_best_times[size].id = remote_map_best_times[i][j].id;
+                strcpy(sorted_remote_map_best_times[size].name, remote_map_best_times[i][j].name);
+                sorted_remote_map_best_times[size].time = remote_map_best_times[i][j].time;
+                strcpy(sorted_remote_map_best_times[size].date, remote_map_best_times[i][j].date);
+                sorted_remote_map_best_times[size].completions = remote_map_best_times[i][j].completions;
+                strcpy(sorted_remote_map_best_times[size].server, pGlobalHostName[i]);
+                strcpy(sorted_remote_map_best_times[size].replay_host_url, pGlobalHostUrl[i]);
+                size++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Merge local scores
+    for (i = 0; i < MAX_HIGHSCORES; i++) {
+        if (level_items.stored_item_times[i].time > 0) {
+            sorted_remote_map_best_times[size].id = level_items.stored_item_times[i].uid;
+            strcpy(sorted_remote_map_best_times[size].name, level_items.stored_item_times[i].owner);
+            sorted_remote_map_best_times[size].time = level_items.stored_item_times[i].time;
+            sorted_remote_map_best_times[size].completions = tourney_record[i].completions;
+            strcpy(sorted_remote_map_best_times[size].date, level_items.stored_item_times[i].date);
+            strcpy(sorted_remote_map_best_times[size].server, gset_vars->global_localhost_name);
+            size++;
+        } else {
+            break;
+        }
+    }
+
+    // Sort by time then date (global scoreboard order)
+    qsort(sorted_remote_map_best_times, size, sizeof(sorted_remote_map_best_times_record), Compare_ByTimeThenDate);
+
+    // Deduplicate by name, keeping best time per player
+    int write_idx = 0;
+    for (i = 0; i < size; i++) {
+        int duplicate = 0;
+        for (j = 0; j < write_idx; j++) {
+            if (STRICMP(sorted_remote_map_best_times[i].name, sorted_remote_map_best_times[j].name) == 0) {
+                duplicate = 1;
+                break;
+            }
+        }
+
+        if (!duplicate) {
+            if (i != write_idx)
+                sorted_remote_map_best_times[write_idx] = sorted_remote_map_best_times[i];
+            write_idx++;
+        }
+    }
+
+    // Clear any unused tail entries
+    for (i = write_idx; i < size; i++) {
+        memset(&sorted_remote_map_best_times[i], 0, sizeof(sorted_remote_map_best_times_record));
+    }
+
+	#undef STRICMP
+}
+
+/* void Sort_Remote_Maptimes(void)
+{
+    #ifdef _WIN32
+        #define STRICMP _stricmp
+    #else
+        #define STRICMP strcasecmp
+    #endif
+
+    int i, j;
+    int size = 0;
+
+    memset(sorted_remote_map_best_times, 0, sizeof(sorted_remote_map_best_times));
+
+    // Merge remote records
+    for (i = 0; i < MAX_REMOTE_HOSTS; i++) {
+        for (j = 0; j < MAX_HIGHSCORES; j++) {
+            if (remote_map_best_times[i][j].time > 0 && strlen(remote_map_best_times[i][j].name) > 0) {
+                sorted_remote_map_best_times[size].id = remote_map_best_times[i][j].id;
+                strcpy(sorted_remote_map_best_times[size].name, remote_map_best_times[i][j].name);
+                sorted_remote_map_best_times[size].time = remote_map_best_times[i][j].time;
+                strcpy(sorted_remote_map_best_times[size].date, remote_map_best_times[i][j].date);
+                sorted_remote_map_best_times[size].completions = remote_map_best_times[i][j].completions;
+                strcpy(sorted_remote_map_best_times[size].server, pGlobalHostName[i]);
+                strcpy(sorted_remote_map_best_times[size].replay_host_url, pGlobalHostUrl[i]);
+                size++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Merge local records
+    for (i = 0; i < MAX_HIGHSCORES; i++) {
+        if (level_items.stored_item_times[i].time > 0) {
+            sorted_remote_map_best_times[size].id = level_items.stored_item_times[i].uid;
+            strcpy(sorted_remote_map_best_times[size].name, level_items.stored_item_times[i].owner);
+            sorted_remote_map_best_times[size].time = level_items.stored_item_times[i].time;
+            sorted_remote_map_best_times[size].completions = tourney_record[i].completions;
+            strcpy(sorted_remote_map_best_times[size].date, level_items.stored_item_times[i].date);
+            strcpy(sorted_remote_map_best_times[size].server, gset_vars->global_localhost_name);
+            size++;
+        } else {
+            break;
+        }
+    }
+
+    // Sort by name, then time
+    qsort(sorted_remote_map_best_times, size, sizeof(sorted_remote_map_best_times_record), Compare_NameThenTime);
+
+    // Deduplicate by name (case-insensitive)
+    int write_idx = 0;
+    for (i = 0; i < size; i++) {
+        if (i == 0 || STRICMP(sorted_remote_map_best_times[i].name, sorted_remote_map_best_times[write_idx - 1].name) != 0) {
+            if (i != write_idx) {
+                sorted_remote_map_best_times[write_idx] = sorted_remote_map_best_times[i];
+            }
+            write_idx++;
+        }
+    }
+
+    // Sort the deduplicated list by time and date ascending
+    qsort(sorted_remote_map_best_times, write_idx, sizeof(sorted_remote_map_best_times_record), Compare_ByTimeThenDate);
+
+    // Cleanup the rest
+    for (i = write_idx; i < size; i++) {
+        memset(&sorted_remote_map_best_times[i], 0, sizeof(sorted_remote_map_best_times_record));
+    }
+
+    #undef STRICMP
+} */
+
+
 
 /*
 ==============================
@@ -1201,7 +1589,7 @@ void Print_Remote_Maptimes(edict_t* ent, char *server)
 			else
 				gi.cprintf(ent, PRINT_HIGH, "<%1d> %-9s %-18s %8s    %-9.3f %d\n", rows_printed, pGlobalHostName[i], remote_map_best_times[i][0].name, remote_map_best_times[i][0].date, remote_map_best_times[i][0].time, remote_map_best_times[i][0].completions);
 		}
-		else if (strcmp(pGlobalHostName, "default") != 0) // print a blank
+		else if (strcmp(pGlobalHostName[i], "default") != 0) // print a blank
 		{
 			rows_printed++;
 			gi.cprintf(ent, PRINT_HIGH, "<%1d> %-9s %-18s %-8s    %-9s %s\n", rows_printed, pGlobalHostName[i], "---", "---", "---", "---");
@@ -1235,7 +1623,7 @@ void Cmd_Remote_Replay(edict_t *ent, int num)
 		{
 			//replay found			
 			ent->client->resp.replaying = MAX_HIGHSCORES + (num + 1);
-			ent->client->resp.replay_frame = 0;	
+			ent->client->resp.replay_frame = 0;
 			if (sorted_remote_map_best_times[num-1].time > 0)
 			{
 				gi.cprintf(ent, PRINT_HIGH, "Replaying %s who finished in %1.3f seconds (@%s on %8s)\n",
@@ -1256,7 +1644,7 @@ void Cmd_Remote_Replay(edict_t *ent, int num)
 		if (level_items.recorded_time_frames[MAX_HIGHSCORES + 1])
 		{
 			ent->client->resp.replaying = MAX_HIGHSCORES + 2;
-			ent->client->resp.replay_frame = 0;		
+			ent->client->resp.replay_frame = 0;
 			if (sorted_remote_map_best_times[0].time > 0)
 			{
 				gi.cprintf(ent, PRINT_HIGH, "Replaying %s who finished in %1.3f seconds (@%s on %8s)\n", sorted_remote_map_best_times[0].name, sorted_remote_map_best_times[0].time, sorted_remote_map_best_times[0].server, sorted_remote_map_best_times[0].date);			
@@ -1278,6 +1666,16 @@ void Cmd_Remote_Replay(edict_t *ent, int num)
 		ent->client->chase_target = NULL;
 		ent->client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
 	}
+	// reset replay distance counter
+	ent->client->resp.replay_distance = 0;
+	ent->client->resp.replay_dist_last_frame = 0;
+	ent->client->resp.replay_first_ups = 0;
+	ent->client->resp.replay_prev_distance = 0;
+	ent->client->resp.replay_tp_frame = 0;
+	if (ent->client->pers.replay_stats)
+		ent->client->showscores = 4;
+	else
+		ent->client->showscores = 0;
 
 	// Proceed with the replay the user requested
 	CTFReplayer(ent);
