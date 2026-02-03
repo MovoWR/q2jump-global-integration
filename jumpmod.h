@@ -3,11 +3,11 @@
 //defines
 #define MAX_USERS 2048 //reduced from 4096 to save memory
 #define MAX_HIGHSCORES 15
-#define CTF_VERSION_S		"1.482global"
+#define CTF_VERSION_S		"1.486global" // fix auto idle passing votes...
 #define		HOOK_READY	0
 #define		HOOK_OUT	1
 #define		HOOK_ON		2
-#define MAX_MAPS           3584    // 1.35global
+#define MAX_MAPS           8192
 #define MAX_MAPNAME_LEN    32 
 #define MAX_MANUAL           32 
 #define MAX_MANUAL_LEN    128 
@@ -22,7 +22,7 @@
 // Global Integration Settings
 #define MAX_REMOTE_HOSTS 5 // DO NOT EDIT!! unless you also update the global_* gsets
 #define MAX_REMOTE_REPLAYS 15 // configurable in-game via gset
-#define HTTP_MULTI_TIMEOUT 6
+#define HTTP_MULTI_TIMEOUT 8
 #define	HTTP_MULTI_CONN_TIMEOUT 3
 #define	HTTP_TIMEOUT 3
 #define	HTTP_CONN_TIMEOUT 3
@@ -153,7 +153,7 @@ typedef struct
 {
 	vec3_t angle;
 	vec3_t origin;
-#ifdef ANIM_REPLAY
+#ifdef ANIM_REPLAY	
 	int frame;
 	//short cur_speed;
 #endif
@@ -498,8 +498,7 @@ typedef struct
 	char global_url_3[256];
 	char global_url_4[256];
 	char global_url_5[256];
-	int global_replay_max;
-	int global_threads_max;
+	int global_replay_max;	
 	int global_port_1;
 	int global_port_2;
 	int global_port_3;

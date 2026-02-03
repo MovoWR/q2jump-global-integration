@@ -95,6 +95,15 @@ void BeginIntermission (edict_t *targ)
 	if (level.intermissiontime)
 		return;		// allready activated
 
+	// Global Integration - purge demos and download ents
+	if (gset_vars->global_integration_enabled)
+	{
+		if (gset_vars->global_ents_sync) // get remote map ents for next map
+		{
+			Download_Remote_Mapents_Async(targ->map);
+		}
+		Purge_Remote_Recordings();		 // clean up the demo files at end of map
+	}
 //ZOID
 	if (deathmatch->value && ctf->value)
 		CTFCalcScores();
@@ -225,15 +234,6 @@ void BeginIntermission (edict_t *targ)
 		if (!client->inuse)
 			continue;
 		MoveClientToIntermission (client);
-	}
-	// Global Integration - purge demos and download ents
-	if (gset_vars->global_integration_enabled)
-	{
-		Purge_Remote_Recordings();		 // clean up the demo files from last map
-		if (gset_vars->global_ents_sync) // get remote map ents
-		{
-			Download_Remote_Mapents(level.changemap);
-		}
 	}
 }
 

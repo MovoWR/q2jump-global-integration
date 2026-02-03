@@ -65,7 +65,7 @@ static char *help_main[] = {
 		"\n\xc7\xec\xef\xe2\xe1\xec \xc3\xef\xed\xed\xe1\xee\xe4\xf3\n", // Global Commands
 		"replay (g)lobal - view a global replay (1-15)\n",
 		"race (g)lobal - race against a global replay (1-15)\n",
-		"repstats - show detailed replay info (1-10 frame interval)\n",
+		"repstats - toggles displaying detailed replay info\n",
 		"maptimes (g)lobal - view best times from a remote server (id|name)\n",
         "--------------------------------------------------\n\n",
         NULL
@@ -591,7 +591,7 @@ zbotcmd_t zbotCommands[] =
 	CMDTYPE_NUMBER,
 	&gset_vars->mset->hyperblaster,
   },
-  {
+  { 
 	1,999,50,
     "intermission", 
     CMDWHERE_CFGFILE | CMD_GSET, 
@@ -817,18 +817,11 @@ zbotcmd_t zbotCommands[] =
     &gset_vars->global_localhost_name,
   },
   {
-	0,15,3,
+	0,15,15,
 	"global_replay_max",
 	CMDWHERE_CFGFILE | CMD_GSET, 
     CMDTYPE_NUMBER,
     &gset_vars->global_replay_max,
-  },
-    {
-	2,15,5,
-	"global_threads_max",
-	CMDWHERE_CFGFILE | CMD_GSET, 
-    CMDTYPE_NUMBER,
-    &gset_vars->global_threads_max,
   },
   {
 	1024,65535,27910,
@@ -1489,7 +1482,7 @@ int LoadMapList(char *filename)
   
       gi.dprintf ("%i map(s) loaded.\n", i); 
       gi.dprintf ("-------------------------------------\n");
-      maplist.nummaps = i;
+      maplist.nummaps = i;	  
 	  WriteMapList();
       return 1; // normal exit 
    } 
@@ -4612,7 +4605,7 @@ void Record_Frame(edict_t *ent)
 				VectorCopy(ent->s.origin, client_record[index].data[client_record[index].current_frame].origin);
 				VectorCopy(ent->client->v_angle, client_record[index].data[client_record[index].current_frame].angle);
 
-#ifdef ANIM_REPLAY
+#ifdef ANIM_REPLAY												
 				store = ent->s.frame | ((ent->client->pers.fps & 255) << RECORD_FPS_SHIFT);
 				if (ent->client->resp.key_back)
 					store |= RECORD_KEY_BACK;
@@ -4653,7 +4646,7 @@ void Cmd_Replay(edict_t *ent)
 		if (level_items.recorded_time_frames[MAX_HIGHSCORES])
 		{
 			ent->client->resp.replaying = MAX_HIGHSCORES+1;
-			ent->client->resp.replay_frame = 0;
+			ent->client->resp.replay_frame = 0;			
 			gi.cprintf(ent,PRINT_HIGH,"Replaying %s who finished in %1.3f seconds.\n",level_items.item_owner,level_items.item_time);
 		} else {
 			gi.cprintf(ent,PRINT_HIGH,"No time set this map.\n");
@@ -4718,7 +4711,7 @@ void Cmd_Replay(edict_t *ent)
 					//demo exists?
 					done_num = true;	
 					ent->client->resp.replaying = num+1;
-					ent->client->resp.replay_frame = 0;
+					ent->client->resp.replay_frame = 0;					
 					gi.cprintf(ent,PRINT_HIGH,"Replaying %s who finished in %1.3f seconds.\n",level_items.stored_item_times[num].owner,level_items.stored_item_times[num].time);
 				}
 			}
@@ -4733,7 +4726,7 @@ void Cmd_Replay(edict_t *ent)
 			if (level_items.recorded_time_frames[0])
 			{
 				ent->client->resp.replaying = 1;
-				ent->client->resp.replay_frame = 0;
+				ent->client->resp.replay_frame = 0;				
 				gi.cprintf(ent,PRINT_HIGH,"Replaying %s who finished in %1.3f seconds.\n",level_items.stored_item_times[0].owner,level_items.stored_item_times[0].time);
 				gi.cprintf(ent,PRINT_HIGH,"Hit forward and back keys to change demo speed, jump to toggle repeating.\n");
 				gi.cprintf(ent,PRINT_HIGH,"Type replay list to see all replays available.\n");
@@ -4761,7 +4754,7 @@ void Cmd_Replay(edict_t *ent)
 	ent->client->resp.replay_tp_frame = 0;
 	if (ent->client->pers.replay_stats)
 		ent->client->showscores = 4;
-	else
+	else 
 	ent->client->showscores = 0;
 
 	CTFReplayer(ent);
@@ -4843,7 +4836,7 @@ void Load_Individual_Recording(int num,int uid)
 	level_items.recorded_time_frames[num] = 0;
 	level_items.recorded_time_uid[num] = -1;
 	tgame = gi.cvar("game", "", 0);
-	sprintf (name, "%s/jumpdemo/%s_%d.dj3", tgame->string,level.mapname,uid);
+	sprintf (name, "%s/jumpdemo/%s_%d.dj3", tgame->string,level.mapname,uid);	
 	f = fopen (name, "rb");
 
 
@@ -5003,14 +4996,14 @@ void Replay_Recording(edict_t *ent)
 			// replay speedometer a la Killa
 			// new experimental replay stats and speedo for global v1.48
 			if (ent->client->resp.replaying && ent->client->resp.replay_speed != REPLAY_SPEED_ZERO)
-			{
+			{				
 				current_frame = (int)frame_integer; // test to undo the previous increment/decrement
 				previous_frame = (current_frame - frame_interval);
 				previous_frame_ups = (current_frame - frame_interval_ups);
 
 				if (previous_frame < 0)
 					previous_frame = 0;
-
+				
 				if (previous_frame_ups < 0)
 					previous_frame_ups = 0;
 
@@ -5018,12 +5011,12 @@ void Replay_Recording(edict_t *ent)
 				rep_speed1[2] = 0;
 				VectorCopy(level_items.recorded_time_data[temp][current_frame].origin, rep_speed2);
 				rep_speed2[2] = 0;
-
+				
 				// 5 frame interval for "smoother" UPS display:
-				VectorCopy(level_items.recorded_time_data[temp][previous_frame_ups].origin, rep_speed_ups);
-				rep_speed_ups[2] = 0;
+				VectorCopy(level_items.recorded_time_data[temp][previous_frame_ups].origin, rep_speed_ups);	
+				rep_speed_ups[2] = 0;			
 
-				VectorSubtract(rep_speed1, rep_speed2, rep_speed1); // using XY for distance figures
+				VectorSubtract(rep_speed1, rep_speed2, rep_speed1); // using XY for distance figures				
 				VectorSubtract(rep_speed_ups, rep_speed2, rep_speed_ups); // for ups
 				time_elapsed = ((current_frame - previous_frame_ups) * FRAMETIME); //* (replay_speed_modifier[ent->client->resp.replay_speed]); // need to check this is correct!
 
@@ -5034,16 +5027,16 @@ void Replay_Recording(edict_t *ent)
 				rep_speed = (int)speed;
 				//  keep track of distance travelled
 				if (ent->client->resp.replay_dist_last_frame == current_frame + 1) // Client is rewinding //FIX ME!!
-				{
-					ent->client->resp.replay_distance -= ent->client->resp.replay_prev_distance;
-					ent->client->resp.replay_dist_last_frame = current_frame;
+				{					
+					ent->client->resp.replay_distance -= ent->client->resp.replay_prev_distance;					
+					ent->client->resp.replay_dist_last_frame = current_frame;					
 					if (real_distance > 500) // FIX ME!! suspect we are sitting on a tp right now!!
 					{
 						ent->client->resp.replay_tp_frame = current_frame;
 						ent->client->resp.replay_prev_distance = 0;
 					}
 					else
-						ent->client->resp.replay_prev_distance = real_distance;
+						ent->client->resp.replay_prev_distance = real_distance;					
 				}
 				else if (ent->client->resp.replay_dist_last_frame == current_frame - 1) // Playing forward direction //FIX ME!!
 				{
@@ -5074,7 +5067,7 @@ void Replay_Recording(edict_t *ent)
 					rep_speed = 0; // fix for frame 0
 					ent->client->resp.replay_first_ups = 0;
 				}
-
+				
 				// replay stats/info
 				// Don't update rep_speed if it's not 10 ups faster/slower than current rep_speed.
 				//if (rep_speed > ent->client->resp.rep_speed + 10 || rep_speed < ent->client->resp.rep_speed - 10)
@@ -5090,8 +5083,8 @@ void Replay_Recording(edict_t *ent)
 					if (cur_tp_diff > 0 && cur_tp_diff < frame_interval_ups)
 					{
 						// re-do the math!
-						VectorCopy(level_items.recorded_time_data[temp][ent->client->resp.replay_tp_frame].origin, rep_speed_ups);
-						rep_speed_ups[2] = 0;
+						VectorCopy(level_items.recorded_time_data[temp][ent->client->resp.replay_tp_frame].origin, rep_speed_ups);						
+						rep_speed_ups[2] = 0;						
 						VectorSubtract(rep_speed_ups, rep_speed2, rep_speed_ups); // for ups
 						time_elapsed = (cur_tp_diff * FRAMETIME);
 						distance_ups = fabs(VectorLength(rep_speed_ups)); // for ups
@@ -5113,7 +5106,7 @@ void Replay_Recording(edict_t *ent)
 				//*******************************************************************************************
 
 				if (run_report && ent->client->pers.replay_stats == 1)
-				{
+				{					
 					// weird hack to get the hud to show up without clashing with the other f1/help/score boards..
 					if (ent->client->showscores == 4)
 					{
@@ -5163,7 +5156,7 @@ void Replay_Recording(edict_t *ent)
 							gi.cprintf(ent, PRINT_HIGH, "\xd0\xec\xe1\xf9\xe5\xf2: %s  \xc4\xe1\xf4\xe5: %8s  \xd4\xe9\xed\xe5: %1.3f  \xd3\xe5\xf2\xf6\xe5\xf2: %s\n", level_items.stored_item_times[temp].owner, level_items.stored_item_times[0].date, level_items.stored_item_times[temp].time,
 									   gset_vars->global_localhost_name);
 						}
-						gi.cprintf(ent, PRINT_HIGH, "Frames: %d\n", current_frame +1);
+						gi.cprintf(ent, PRINT_HIGH, "Frames: %d\n", current_frame +1);						
 						gi.cprintf(ent, PRINT_HIGH, "Average UPS: %1.3f\n", ent->client->resp.replay_distance / rep_time);
 						gi.cprintf(ent, PRINT_HIGH, "Start UPS (@frame 4): %d\n", ent->client->resp.replay_first_ups);
 						gi.cprintf(ent, PRINT_HIGH, "End UPS (@frame %d): %d\n", level_items.recorded_time_frames[temp], rep_speed);
@@ -5189,7 +5182,7 @@ void Replay_Recording(edict_t *ent)
 				ent->client->resp.replay_frame = 0;
 				ent->client->resp.replay_distance = 0;
 				ent->client->resp.replay_prev_distance = 0;
-				ent->client->resp.replay_first_ups = 0;
+				ent->client->resp.replay_first_ups = 0;				
 				//ent->client->showscores = 0;
 				ent->client->resp.replay_tp_frame = 0;
 				ent->client->resp.rep_speed = 0;
@@ -6840,8 +6833,7 @@ void SetDefaultValues(void)
 	strcpy(gset_vars->global_url_3,"");
 	strcpy(gset_vars->global_url_4,"");
 	strcpy(gset_vars->global_url_5,"");
-	gset_vars->global_replay_max = 5; // how many replays to download 0-15
-	gset_vars->global_threads_max = 5;
+	gset_vars->global_replay_max = 15; // how many replays to download 0-15	
 	gset_vars->global_port_1 = 27910; // allow diff ports for remote hosts
 	gset_vars->global_port_2 = 27910;
 	gset_vars->global_port_3 = 27910;
@@ -7683,8 +7675,10 @@ void removemapfrom_uid_file(int uid){
 	cvar_t	*port;
 	cvar_t	*tgame;
 	char	name[256];
-    maplist_uid_file maplistinuid[MAX_MAPS];
+    static maplist_uid_file maplistinuid[MAX_MAPS]; // too large to alloc on the stack
 	char	mapname[256];
+    
+    memset(maplistinuid, 0, sizeof(maplistinuid));
 
 	tgame = gi.cvar("game", "", 0);
 	port = gi.cvar("port", "", 0);
@@ -9620,7 +9614,7 @@ float add_item_to_queue(edict_t *ent, float item_time,char *owner,char *name)
 				{
 					Sort_Remote_Maptimes(); // now update remote board
 					if (i < gset_vars->global_replay_max)
-						Load_Remote_Recordings(i); // now reload remote replays from this position..
+						Load_Remote_Recordings(i); // now reload remote replays from this position..					
 					break; // only needs to be called once for a full reload...
 				}
 			}
@@ -10125,7 +10119,7 @@ void AddMap(edict_t *ent)
 			gi.cprintf(ent, PRINT_HIGH, "Map not found on server, trying to download: %s.bsp from remote server...\n", mapname);
 			sprintf(filename, "%s/maps/%s.bsp", tgame->string, mapname);
 			sprintf(url, "%s/%s.bsp", gset_vars->global_map_url, mapname);
-			HTTP_Get_File(url, filename, 8);
+			HTTP_Get_File(url, filename, 8); // TODO: Update to ASYNC model!
 			// check one last time!
 			f = fopen(filename, "r");
 			if (!f) // test if the map exists in the mod/maps folder
@@ -10228,7 +10222,7 @@ void Cmd_RepRepeat (edict_t *ent)
 
 	if (ent->client->resp.rep_repeat)
 	{
-		ent->client->resp.rep_repeat = 0;
+		ent->client->resp.rep_repeat = 0;		
 		gi.cprintf (ent, PRINT_HIGH, "Replay repeating is OFF.\n");
 		return;
 	}
@@ -12385,13 +12379,14 @@ void CreateHTML(edict_t *ent,int type,int usenum)
 }
 
 void Cmd_Idle(edict_t *ent) {
-	if (!ent->client->pers.idle_player) {
+	if (!ent->client->pers.idle_player && ent->client->pers.frames_without_movement < 60000) {
 		gi.cprintf(ent, PRINT_HIGH, "You are now marked as idle!\n");
 		ent->client->pers.idle_player = true;
 	}
 	else {
 		gi.cprintf(ent, PRINT_HIGH, "You are no longer idle! Welcome back.\n");
 		ent->client->pers.idle_player = false;
+		ent->client->pers.frames_without_movement = 0;
 	}
 
 }

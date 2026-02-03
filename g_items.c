@@ -3760,7 +3760,7 @@ void cpbrush_think(edict_t *self) {
 			continue;
 		gi.WriteByte(svc_configstring);
 		gi.WriteShort(CS_MODELS + self->s.modelindex);
-		if (self->spawnflags & 1) {
+		if (self->spawnflags & 1) {			
 			if ((!(self->spawnflags & 2) && ent->client->resp.store[0].checkpoints < self->count) || (self->spawnflags & 2 && ent->client->resp.store[0].cpbox_checkpoint[self->count] == 0)) {
 				gi.WriteString("models/jump/emptymodel/tris.md2");
 			}
@@ -3768,7 +3768,7 @@ void cpbrush_think(edict_t *self) {
 				gi.WriteString(self->model);
 			}
 		}
-		else {
+		else {			
 			if ((!(self->spawnflags & 2) && ent->client->resp.store[0].checkpoints >= self->count) || (self->spawnflags & 2 && ent->client->resp.store[0].cpbox_checkpoint[self->count] == 1)) {
 				gi.WriteString("models/jump/emptymodel/tris.md2");
 			}

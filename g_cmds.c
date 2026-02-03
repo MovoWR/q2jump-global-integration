@@ -1400,17 +1400,9 @@ void ClientCommand (edict_t *ent)
 			{
 				if (gset_vars->global_integration_enabled == 1)
 				{
-					gi.bprintf(PRINT_HIGH, "Refreshing all global data...\n");
-					// full refresh, might cause performance issues
-					// shound't really be needed, use carefully!
-					Download_Remote_Users_Files();			
-					Load_Remote_Users_Files();
-					Download_Remote_Maptimes(level.mapname);
-					Load_Remote_Maptimes(level.mapname);
-					Sort_Remote_Maptimes();
-					Download_Remote_Recordings_MT(level.mapname);
-					Load_Remote_Recordings(0); // start from position 0 == load them all
-					gi.bprintf(PRINT_HIGH, "Done!\n");
+					gi.cprintf(ent,PRINT_HIGH, "Refreshing all global data...\n");
+					Download_Remote_Users_Async(0);
+					gi.cprintf(ent,PRINT_HIGH, "Done!\n");
 				} else {
 					gi.bprintf(PRINT_HIGH, "Global Integration is currently disabled on this server...\n");
 				}

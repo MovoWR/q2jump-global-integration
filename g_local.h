@@ -850,7 +850,7 @@ void FetchClientEntData (edict_t *ent);
 void EndDMLevel (void);
 
 //pooy
-void EndDMLevel (void);  // not sure why id didn't include this 
+//void EndDMLevel (void);  // not sure why id didn't include this 
 
 
 //

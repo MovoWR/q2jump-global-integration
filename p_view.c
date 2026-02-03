@@ -1274,11 +1274,11 @@ void ClientEndServerFrame (edict_t *ent)
 		if (!ent->client->resp.paused)
 		{
 	//		if (ent->client->resp.ctf_team==CTF_TEAM2)
-			ent->client->resp.item_timer+= 0.1;
+			ent->client->resp.item_timer+= 0.1;			
 			//gi.bprintf(PRINT_HIGH,"%f %f %f origin\n",ent->s.origin[0]*8,ent->s.origin[1]*8,ent->s.origin[2]*8);
 			Record_Frame(ent);
 			Replay_Recording(ent);
-		}
+		}				
 	}
 	//if (1 == ESF_debug)
 //		debug_log ("CHECKPOINT: Function: ClientEndServerFrame Line: 1246 File: p_view.c");
