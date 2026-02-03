@@ -10,7 +10,6 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     env:
-      WORKDIR: src
       BUILD_DIR: release
       LIB_NAME: gamex86_64.so
     steps:
@@ -35,7 +34,6 @@ jobs:
           ccache --version || true
 
       - name: Build (release)
-        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           set -euo pipefail
@@ -51,6 +49,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: game-linux-x86_64
-          path: ${{ github.workspace }}/${{ env.WORKDIR }}/${{ env.BUILD_DIR }}/${{ env.LIB_NAME }}
+          path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/${{ env.LIB_NAME }}
           if-no-files-found: error
           retention-days: 14
