@@ -741,6 +741,8 @@ void Cmd_Kill_f (edict_t *ent)
 	if (ent->client->resp.ctf_team==CTF_TEAM2) {
 		ClearPersistants(&ent->client->pers);
 		ClearCheckpoints(ent);
+		// Reset split timer on kill
+		ent->client->resp.split_touched = 0;
 	}
 	hud_footer(ent);
 
@@ -1264,6 +1266,10 @@ void ClientCommand (edict_t *ent)
 			if (!level.overtime)
 			Cmd_Recall (ent);
 		}
+		else if (Q_stricmp (cmd, "setspawn") == 0)
+			Cmd_SetSpawn(ent);
+		else if (Q_stricmp (cmd, "clearspawn") == 0)
+			Cmd_ClearSpawn(ent);
 		else if (Q_stricmp (cmd, "addtime") == 0)
 			Add_Time (ent);
 		else if (Q_stricmp (cmd, "!fps") == 0)

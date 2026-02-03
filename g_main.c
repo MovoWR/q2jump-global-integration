@@ -20,6 +20,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "g_local.h"
 
+// Global variable definitions (declared as extern in headers)
+html_data_t html_data;
+int ESF_debug;
+
 // Frameskip detection and logging
 #ifdef _WIN32
 #include <windows.h>
@@ -878,7 +882,7 @@ Advances the world by 0.1 seconds
 */
 void G_RunFrame (void)
 {
-	// Frameskip detection and logging	
+	// Frameskip detection and logging
 	double start, elapsed;
 	start = GetTimeSeconds();
 
@@ -1224,7 +1228,7 @@ void G_RunFrame (void)
 	AsyncStage_Poll(); // Global async download poller
 
 	// Frameskip check and log
-    
+
     elapsed = GetTimeSeconds() - start;
     if (g_logskips->value && elapsed > 0.1) {
         int skipped = (int)(elapsed / 0.1);

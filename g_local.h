@@ -850,7 +850,7 @@ void FetchClientEntData (edict_t *ent);
 void EndDMLevel (void);
 
 //pooy
-//void EndDMLevel (void);  // not sure why id didn't include this 
+//void EndDMLevel (void);  // not sure why id didn't include this
 
 
 //
@@ -925,6 +925,11 @@ typedef struct
 	qboolean	store_velocity;		//velocity store feature (toggle)
 	qboolean	stuffed;
 	int replay_stats;
+
+	// custom spawn point (from trigger_start_area + setspawn command)
+	qboolean	has_custom_spawn;		// player has set a custom spawn point
+	vec3_t		custom_spawn_origin;	// custom spawn position
+	vec3_t		custom_spawn_angles;	// custom spawn view angles
 } client_persistant_t;
 
 //hud stuff
@@ -1074,6 +1079,17 @@ typedef struct
 	hud_struct	hud[4];
 	char		hudstring[2048];
 	char		client_version[128];
+
+	// split timer system
+	int			split_touched;			// bitmask of touched split points (up to 32 splits)
+	int			split_count;			// number of splits hit this run
+	float		split_times[32];		// player's time at each split
+	float		split_replay_times[32];	// replay's time at each split (for comparison)
+	int			split_speeds[32];		// player's speed at each split
+	int			split_replay_speeds[32];// replay's speed at each split
+
+	// start area - tracks if player is currently inside trigger (not persistent)
+	qboolean	in_start_area;			// currently inside a start_area trigger
 
 } client_respawn_t;
 
@@ -1360,7 +1376,7 @@ struct edict_s
 
 };
 
-int ESF_debug;
+extern int ESF_debug;
 
 //ZOID
 #include "g_ctf.h"

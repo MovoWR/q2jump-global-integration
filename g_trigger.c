@@ -935,6 +935,306 @@ void SP_trigger_monsterjump (edict_t *self)
 	self->movedir[2] = st.height;
 }
 
+/*
+==============================================================================
+
+trigger_timer_split
+
+Split timer for race comparisons with replay ghosts (V1 replay compatible).
+Tracks player progress through checkpoints and compares with replay times/speeds.
+
+==============================================================================
+*/
+
+// Calculate replay speed from V1 position deltas
+static int calculate_replay_speed_v1(int slot, int frame) {
+	vec3_t pos1, pos2, delta;
+	float dist, speed;
+
+	if (frame <= 0 || frame >= level_items.recorded_time_frames[slot])
+		return 0;
+
+	// Get positions from consecutive frames
+	VectorCopy(level_items.recorded_time_data[slot][frame-1].origin, pos1);
+	VectorCopy(level_items.recorded_time_data[slot][frame].origin, pos2);
+
+	// Calculate horizontal speed (ignore vertical)
+	delta[0] = pos2[0] - pos1[0];
+	delta[1] = pos2[1] - pos1[1];
+	delta[2] = 0;
+
+	dist = VectorLength(delta);
+	speed = dist / FRAMETIME;  // FRAMETIME = 0.1 seconds
+
+	return (int)speed;
+}
+
+// Find replay frame closest to player's position (V1 compatible)
+static int find_replay_frame_at_position_v1(int slot, vec3_t pos, float tolerance, float expected_time) {
+	int total_frames = level_items.recorded_time_frames[slot];
+	float best_time_delta = 999999.0f;
+	float best_dist = 999999.0f;
+	int best_frame = -1;
+	int i;
+	vec3_t replay_pos, diff;
+	float dist, frame_time, time_delta;
+
+	if (total_frames <= 0)
+		return -1;
+
+	for (i = 0; i < total_frames; i++) {
+		VectorCopy(level_items.recorded_time_data[slot][i].origin, replay_pos);
+		VectorSubtract(pos, replay_pos, diff);
+		dist = VectorLength(diff);
+
+		if (dist < tolerance) {
+			// V1: estimate time from frame number
+			frame_time = i * FRAMETIME;
+			time_delta = fabsf(frame_time - expected_time);
+
+			if (best_frame == -1 || time_delta < best_time_delta ||
+				(time_delta == best_time_delta && dist < best_dist)) {
+				best_time_delta = time_delta;
+				best_dist = dist;
+				best_frame = i;
+			}
+		}
+	}
+	return best_frame;
+}
+
+void timer_split_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf)
+{
+	int split_id;
+	float my_time;
+	float replay_time;
+	int replay_slot, replay_frame;
+	int speed;
+	int replay_speed;
+	int speed_diff;
+	qboolean show_diff;
+	int history_idx;
+
+	if (!other->client)
+		return;
+	if (other->client->resp.replaying)
+		return;
+	if (other->client->resp.finished)
+		return;
+
+	split_id = self->count;
+	if (split_id < 0 || split_id > 31)
+		split_id = 0;
+
+	// Check if already touched this split
+	if (other->client->resp.split_touched & (1 << split_id))
+		return;
+
+	// Mark as touched
+	other->client->resp.split_touched |= (1 << split_id);
+
+	// Calculate player's current time
+	my_time = (level.framenum - other->client->resp.client_think_begin) * FRAMETIME;
+	speed = other->client->resp.cur_speed;
+	replay_speed = 0;
+	replay_time = 0;
+	speed_diff = 0;
+	show_diff = false;
+
+	// Find selected replay's time at this position (race target if set)
+	replay_slot = 0;
+	if (other->client->resp.rep_racing && other->client->resp.rep_race_number >= 0) {
+		int race_slot = other->client->resp.rep_race_number;
+		if (race_slot >= 0 && race_slot < (1 + MAX_HIGHSCORES + MAX_REMOTE_REPLAYS))
+			replay_slot = race_slot;
+	}
+
+	// Store in split history
+	history_idx = other->client->resp.split_count;
+	if (history_idx < 32) {
+		other->client->resp.split_times[history_idx] = my_time;
+		other->client->resp.split_speeds[history_idx] = speed;
+		other->client->resp.split_replay_times[history_idx] = 0;
+		other->client->resp.split_replay_speeds[history_idx] = 0;
+	}
+
+	if (level_items.recorded_time_frames[replay_slot] <= 0) {
+		// No replay available, increment count and show current speed only
+		if (history_idx < 32)
+			other->client->resp.split_count++;
+
+		if (!(self->spawnflags & 1) && !other->client->resp.cmsg) {
+			char header[32];
+			Com_sprintf(header, sizeof(header), "=== Split %d ===", split_id + 1);
+			HighAscii(header);
+			gi.centerprintf(other, "%s\nSpeed: %d ups", header, speed);
+		}
+		return;
+	}
+
+	// Find the replay frame closest to the player's position at this split
+	replay_frame = find_replay_frame_at_position_v1(replay_slot, other->s.origin, 128.0f, my_time);
+
+	if (replay_frame < 0) {
+		// No matching frame found, increment count and show current speed only
+		if (history_idx < 32)
+			other->client->resp.split_count++;
+
+		if (!(self->spawnflags & 1) && !other->client->resp.cmsg) {
+			char header[32];
+			Com_sprintf(header, sizeof(header), "=== Split %d ===", split_id + 1);
+			HighAscii(header);
+			gi.centerprintf(other, "%s\nSpeed: %d ups", header, speed);
+		}
+		return;
+	}
+
+	// Get replay time at this frame (V1: frame-based estimation)
+	replay_time = replay_frame * FRAMETIME;
+
+	// Calculate replay speed from position deltas (V1 method)
+	replay_speed = calculate_replay_speed_v1(replay_slot, replay_frame);
+	if (replay_speed > 0) {
+		speed_diff = speed - replay_speed;
+		show_diff = true;
+	}
+
+	// Store replay data in history
+	if (history_idx < 32) {
+		other->client->resp.split_replay_times[history_idx] = replay_time;
+		other->client->resp.split_replay_speeds[history_idx] = replay_speed;
+		other->client->resp.split_count++;
+	}
+
+	if (!(self->spawnflags & 1) && !other->client->resp.cmsg) {
+		char header[32];
+		char speed_str[32];
+
+		// Format header with HighAscii
+		Com_sprintf(header, sizeof(header), "=== Split %d ===", split_id + 1);
+		HighAscii(header);
+
+		// Check if speed comparison is enabled via gset
+		if (gset_vars->split_compare_speed && show_diff) {
+			// Show speed + diff to replay (comparison mode)
+			// Format speed diff string
+			if (speed_diff >= 0)
+				Com_sprintf(speed_str, sizeof(speed_str), "+%d", speed_diff);
+			else
+				Com_sprintf(speed_str, sizeof(speed_str), "%d", speed_diff);
+
+			// Highlight speed if ahead (positive diff means faster)
+			if (speed_diff > 0)
+				HighAscii(speed_str);
+
+			gi.centerprintf(other,
+				"%s\nSpeed: %d ups (%s)",
+				header, speed, speed_str);
+		}
+		else {
+			// Show only current speed (no comparison)
+			gi.centerprintf(other,
+				"%s\nSpeed: %d ups",
+				header, speed);
+		}
+	}
+}
+
+void SP_trigger_timer_split(edict_t *self)
+{
+	if (self->wait < 0.5)
+		self->wait = 0.5;
+
+	if (self->count < 0)
+		self->count = 0;
+	if (self->count > 31)
+		self->count = 31;
+
+	InitTrigger(self);
+	self->touch = timer_split_touch;
+}
+
+/*
+==============================================================================
+
+trigger_start_area
+
+==============================================================================
+*/
+
+/*QUAKED trigger_start_area (.5 .5 .8) ? SILENT
+Defines the start zone where players can set custom spawn points.
+Players on team_hard (or all teams if gset custom_spawn_enabled=2) can use
+the 'setspawn' command while inside this trigger to set their spawn point.
+
+"message"   Text shown when entering area (default: "You are in the start area")
+"wait"      Message throttle interval (default 1.0)
+
+spawnflags:
+SILENT (1)  disable entry message
+*/
+void start_area_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf)
+{
+	if (!other->client)
+		return;
+
+	// Already in start area
+	if (other->client->resp.in_start_area)
+		return;
+
+	// Mark player as in start area
+	other->client->resp.in_start_area = true;
+
+	// Show entry message (if not silent)
+	if (!(self->spawnflags & 1) && trigger_timer(self->wait)) {
+		if (self->message)
+			gi.cprintf(other, PRINT_HIGH, "%s\n", self->message);
+		else
+			gi.cprintf(other, PRINT_HIGH, "You are in the start area. Use 'setspawn' to set your spawn point.\n");
+	}
+}
+
+void start_area_leave(edict_t *self)
+{
+	int i;
+	edict_t *ent;
+
+	// Check all clients - if they're no longer touching this trigger, clear their flag
+	for (i = 1; i <= game.maxclients; i++) {
+		ent = &g_edicts[i];
+		if (!ent->inuse || !ent->client)
+			continue;
+
+		// Simple bounds check - if player is outside trigger bounds, clear flag
+		if (ent->client->resp.in_start_area) {
+			vec3_t mins, maxs;
+			VectorAdd(self->s.origin, self->mins, mins);
+			VectorAdd(self->s.origin, self->maxs, maxs);
+
+			if (ent->s.origin[0] < mins[0] || ent->s.origin[0] > maxs[0] ||
+			    ent->s.origin[1] < mins[1] || ent->s.origin[1] > maxs[1] ||
+			    ent->s.origin[2] < mins[2] || ent->s.origin[2] > maxs[2]) {
+				ent->client->resp.in_start_area = false;
+			}
+		}
+	}
+
+	self->nextthink = level.time + 0.1;
+}
+
+void SP_trigger_start_area(edict_t *self)
+{
+	if (self->wait < 1.0)
+		self->wait = 1.0;
+
+	InitTrigger(self);
+	self->touch = start_area_touch;
+
+	// Set up periodic check for players leaving the area
+	self->think = start_area_leave;
+	self->nextthink = level.time + 0.1;
+}
+
 // Trigger that works with Pickup_Weapon.
 // Used as a finish (railgun by default)
 // Add a <message> value with a classname of a weapon in the editor to change it to some other weapon.

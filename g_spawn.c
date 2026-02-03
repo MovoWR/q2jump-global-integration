@@ -70,6 +70,8 @@ void SP_trigger_counter (edict_t *ent);
 void SP_trigger_elevator (edict_t *ent);
 void SP_trigger_gravity (edict_t *ent);
 void SP_trigger_monsterjump (edict_t *ent);
+void SP_trigger_timer_split (edict_t *ent);
+void SP_trigger_start_area (edict_t *ent);
 void SP_trigger_finish(edict_t *ent);
 
 void SP_target_temp_entity (edict_t *ent);
@@ -231,6 +233,8 @@ spawn_t	spawns[] = {
 	{"trigger_elevator", SP_trigger_elevator},
 	{"trigger_gravity", SP_trigger_gravity},
 	{"trigger_monsterjump", SP_trigger_monsterjump},
+	{"trigger_timer_split", SP_trigger_timer_split},
+	{"trigger_start_area", SP_trigger_start_area},
 	{"trigger_finish", SP_trigger_finish},
 
 	{"target_temp_entity", SP_target_temp_entity},
@@ -910,7 +914,7 @@ debug_log(text);
 	}
 
 	if (gset_vars->global_integration_enabled == 1)
-	{		
+	{
 		Download_Remote_Maptimes_Async(level.mapname);
 	} else
 	{

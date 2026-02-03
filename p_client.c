@@ -694,6 +694,12 @@ void InitClientPersistant(gclient_t *client)
 	//repstats through mapchange
 	repstats = client->pers.replay_stats;
 
+	// custom spawn - preserve through respawn
+	qboolean has_custom_spawn = client->pers.has_custom_spawn;
+	vec3_t custom_spawn_origin, custom_spawn_angles;
+	VectorCopy(client->pers.custom_spawn_origin, custom_spawn_origin);
+	VectorCopy(client->pers.custom_spawn_angles, custom_spawn_angles);
+
 	//char		user_temp[1024];
 
 	//ww - hang on to user ip and banlevel
@@ -747,6 +753,11 @@ void InitClientPersistant(gclient_t *client)
 
 	//repstats through mapchange
 	client->pers.replay_stats = repstats;
+
+	// custom spawn - restore the values
+	client->pers.has_custom_spawn = has_custom_spawn;
+	VectorCopy(custom_spawn_origin, client->pers.custom_spawn_origin);
+	VectorCopy(custom_spawn_angles, client->pers.custom_spawn_angles);
 }
 
 
@@ -1164,6 +1175,12 @@ void PutClientInServer (edict_t *ent)
 	int		i;
 	client_persistant_t	saved;
 	client_respawn_t	resp;
+
+	// Reset split timer tracking on spawn
+	if (ent->client) {
+		ent->client->resp.split_touched = 0;
+		ent->client->resp.split_count = 0;
+	}
 	gitem_t		*item;
 
 	unpause_client(ent);
@@ -1192,6 +1209,17 @@ void PutClientInServer (edict_t *ent)
 			VectorCopy(ent->client->resp.store[1].store_angles,spawn_angles);
 		}
 	}
+
+	// Custom spawn point override (from trigger_start_area + setspawn)
+	// Always use custom spawn if set - it overrides store/recall
+	if (ent->client->pers.has_custom_spawn)
+	{
+		for (i=0 ; i<2 ; i++)
+			ent->client->ps.pmove.delta_angles[i] = ANGLE2SHORT(ent->client->pers.custom_spawn_angles[i] - ent->client->resp.cmd_angles[i]);
+		VectorCopy(ent->client->pers.custom_spawn_origin, spawn_origin);
+		VectorCopy(ent->client->pers.custom_spawn_angles, spawn_angles);
+	}
+
 	ent->client->resp.finished = false;
 
 	hook_reset(ent->client->hook);

@@ -153,7 +153,7 @@ typedef struct
 {
 	vec3_t angle;
 	vec3_t origin;
-#ifdef ANIM_REPLAY	
+#ifdef ANIM_REPLAY
 	int frame;
 	//short cur_speed;
 #endif
@@ -498,7 +498,7 @@ typedef struct
 	char global_url_3[256];
 	char global_url_4[256];
 	char global_url_5[256];
-	int global_replay_max;	
+	int global_replay_max;
 	int global_port_1;
 	int global_port_2;
 	int global_port_3;
@@ -534,6 +534,8 @@ typedef struct
 	unsigned int target_glow;
 	unsigned int tourney;
 	int read_only_mode; // Grish
+	int custom_spawn_enabled;	// 0=disabled, 1=team_hard only, 2=all teams
+	int split_compare_speed;	// 0=show own speed only, 1=show speed + diff to replay
 } gset_vars_t;
 
 typedef struct
@@ -586,6 +588,8 @@ extern char zbbuffer2[256];
 
 void KillMyRox(edict_t *ent);
 void Cmd_Race (edict_t *ent);
+void Cmd_SetSpawn(edict_t *ent);
+void Cmd_ClearSpawn(edict_t *ent);
 void stuffcmd(edict_t *e, char *s);
 int Q_stricmp (char *s1, char *s2);
 char *Info_ValueForKey (char *s, char *key);
@@ -750,7 +754,7 @@ typedef struct {
 	char tplate[SIZEOF_HTML_BUFFER];
 	int len;
 } html_data_t;
-html_data_t html_data;
+extern html_data_t html_data;
 
 #define HTML_TEMPLATE_POSITION "$template_position$"
 #define HTML_TEMPLATE_MAPBESTTIME "$template_mapbesttime$"
