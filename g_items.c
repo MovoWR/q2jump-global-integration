@@ -604,6 +604,8 @@ qboolean Pickup_Key (edict_t *ent, edict_t *other)
 		other->client->resp.item_timer = 0; // internal timer reset 1
 		other->client->resp.client_think_begin = Sys_Milliseconds(); // ui timer reset and internal timer reset 2
 		other->client->resp.race_frame = 0; //reset race frame if racing
+		other->client->resp.split_touched = 0;
+		other->client->resp.split_count = 0;
 		ClearPersistants(&other->client->pers);
 		ClearCheckpoints(other);
 	}

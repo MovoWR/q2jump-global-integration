@@ -27,7 +27,12 @@ void InitTrigger (edict_t *self)
 
 	self->solid = SOLID_TRIGGER;
 	self->movetype = MOVETYPE_NONE;
-	gi.setmodel (self, self->model);
+	if (self->model && self->model[0]) {
+		gi.setmodel (self, self->model);
+	} else {
+		self->s.modelindex = 1;
+		gi.dprintf("InitTrigger: %s with NULL model\n", self->classname ? self->classname : "<null>");
+	}
 	self->svflags = SVF_NOCLIENT;
 }
 
@@ -1034,7 +1039,9 @@ void timer_split_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface_
 	other->client->resp.split_touched |= (1 << split_id);
 
 	// Calculate player's current time
-	my_time = (level.framenum - other->client->resp.client_think_begin) * FRAMETIME;
+	if (!other->client->resp.client_think_begin)
+		return;
+	my_time = (Sys_Milliseconds() - other->client->resp.client_think_begin) / 1000.0f;
 	speed = other->client->resp.cur_speed;
 	replay_speed = 0;
 	replay_time = 0;
@@ -1157,6 +1164,77 @@ void SP_trigger_timer_split(edict_t *self)
 /*
 ==============================================================================
 
+trigger_start
+
+==============================================================================
+*/
+
+/*QUAKED trigger_start (.5 .5 .5) ? SILENT
+Race start trigger that resets timers and starts a new run.
+
+"message"   Text shown on touch (optional)
+"wait"      Message throttle interval (default 1.0)
+
+spawnflags:
+SILENT (1)  disable touch message
+*/
+void trigger_start_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf)
+{
+	gitem_t *item;
+
+	if (!other->client)
+		return;
+
+	if (other->client->resp.finished == 1 && !other->client->resp.replaying)
+		return;
+
+	if (self->message && !(self->spawnflags & 1) && trigger_timer(self->wait)) {
+		gi.cprintf(other, PRINT_HIGH, "%s\n", self->message);
+	}
+
+	memset(other->client->pers.inventory, 0, sizeof(other->client->pers.inventory));
+
+	item = FindItem("Blaster");
+	other->client->newweapon = item;
+	ChangeWeapon(other);
+
+	Stop_Recording(other);
+	Start_Recording(other);
+	other->client->resp.item_timer = 0;
+	other->client->resp.client_think_begin = Sys_Milliseconds();
+	other->client->resp.race_frame = 0;
+	ClearPersistants(&other->client->pers);
+	ClearCheckpoints(other);
+
+	// Reset split history for a clean run
+	other->client->resp.split_touched = 0;
+	other->client->resp.split_count = 0;
+	memset(other->client->resp.split_times, 0, sizeof(other->client->resp.split_times));
+	memset(other->client->resp.split_replay_times, 0, sizeof(other->client->resp.split_replay_times));
+	memset(other->client->resp.split_speeds, 0, sizeof(other->client->resp.split_speeds));
+	memset(other->client->resp.split_replay_speeds, 0, sizeof(other->client->resp.split_replay_speeds));
+}
+
+void SP_trigger_start(edict_t *self)
+{
+	if (self->wait < 1.0f)
+		self->wait = 1.0f;
+
+	if (self->model && self->model[0]) {
+		InitTrigger(self);
+	} else {
+		self->solid = SOLID_TRIGGER;
+		self->movetype = MOVETYPE_NONE;
+		self->svflags |= SVF_NOCLIENT;
+		self->s.modelindex = 1;
+	}
+	self->touch = trigger_start_touch;
+	gi.linkentity(self);
+}
+
+/*
+==============================================================================
+
 trigger_start_area
 
 ==============================================================================
@@ -1227,12 +1305,26 @@ void SP_trigger_start_area(edict_t *self)
 	if (self->wait < 1.0)
 		self->wait = 1.0;
 
-	InitTrigger(self);
+	if (level.start_area) {
+		gi.dprintf("trigger_start_area: multiple instances found, keeping the first\n");
+		G_FreeEdict(self);
+		return;
+	}
+	level.start_area = self;
+
+	if (self->model && self->model[0]) {
+		InitTrigger(self);
+	} else {
+		self->solid = SOLID_TRIGGER;
+		self->movetype = MOVETYPE_NONE;
+		self->svflags |= SVF_NOCLIENT;
+	}
 	self->touch = start_area_touch;
 
 	// Set up periodic check for players leaving the area
 	self->think = start_area_leave;
 	self->nextthink = level.time + 0.1;
+	gi.linkentity(self);
 }
 
 // Trigger that works with Pickup_Weapon.
@@ -1263,6 +1355,56 @@ void SP_trigger_finish(edict_t *ent)
 	ent->item = wep;
 	//ent->item->pickup_name = wep->pickup_name;
 	ent->touch = Pickup_Weapon;
-	gi.setmodel(ent, ent->model);
+	if (ent->model && ent->model[0]) {
+		gi.setmodel(ent, ent->model);
+	} else {
+		ent->s.modelindex = 1;
+	}
 	gi.linkentity(ent);
+}
+
+/*
+==============================================================================
+
+trigger_cp
+
+==============================================================================
+*/
+
+/*QUAKED trigger_cp (.5 .5 .5) ? SILENT
+Invisible checkpoint trigger with same functionality as cpbox entities.
+Players touching this trigger will collect the checkpoint if they don't already have it.
+
+"count"     Checkpoint ID (0-63, must be unique per checkpoint)
+"wait"      Message throttle interval (default 0.5)
+"target"    Special targets:
+            "cp_clear" - Clears all checkpoints
+            "start_line" - Resets timer and starts new recording
+            "ordered" - Enforces sequential checkpoint collection
+
+spawnflags:
+SILENT (1)  disable checkpoint messages
+*/
+
+// Forward declaration - using the existing cpbox_touch from g_items.c
+extern void cpbox_touch(edict_t *self, edict_t *other, cplane_t *plane, csurface_t *surf);
+
+void SP_trigger_cp(edict_t *self)
+{
+	if (self->wait < 0.5)
+		self->wait = 0.5;
+
+	// Validate checkpoint ID (0-63)
+	if (self->count < 0)
+		self->count = 0;
+	if (self->count > 63)
+		self->count = 63;
+
+	InitTrigger(self);
+
+	// Use the same touch function as cpbox entities
+	self->touch = cpbox_touch;
+
+	// Make it invisible (no model)
+	self->svflags |= SVF_NOCLIENT;
 }

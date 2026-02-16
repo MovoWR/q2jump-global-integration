@@ -5328,6 +5328,7 @@ void Cmd_Recall(edict_t *ent)
 
 	// Reset split tracking on recall
 	ent->client->resp.split_touched = 0;
+	ent->client->resp.split_count = 0;
 
 	if (gametype->value==GAME_CTF)
 		return;
@@ -7388,6 +7389,9 @@ void Apply_Paused_Details(edict_t *ent)
 void Kill_Hard(edict_t *ent)
 {
 	vec3_t	spawn_origin, spawn_angles;
+	vec3_t	spawn_velocity;
+	qboolean	use_spawn_velocity;
+	edict_t	*spawn_spot;
 	gclient_t	*client;
 	int		i;
 	gitem_t		*item;
@@ -7408,13 +7412,27 @@ void Kill_Hard(edict_t *ent)
 	memset(ent->client->pers.inventory, 0, sizeof(ent->client->pers.inventory));
 	ent->client->Jet_framenum = 0;
 
-	SelectSpawnPoint (ent, spawn_origin, spawn_angles);
+	VectorClear(spawn_velocity);
+	use_spawn_velocity = false;
+	spawn_spot = SelectSpawnPointSpot(ent, spawn_origin, spawn_angles);
+	if (spawn_spot && spawn_spot != ent) {
+		vec3_t forward;
+		VectorCopy(spawn_spot->velocity, spawn_velocity);
+		if (VectorLength(spawn_velocity) < 0.01f && spawn_spot->speed > 0.0f) {
+			AngleVectors(spawn_spot->s.angles, forward, NULL, NULL);
+			VectorScale(forward, spawn_spot->speed, spawn_velocity);
+		}
+		if (VectorLength(spawn_velocity) > 0.01f)
+			use_spawn_velocity = true;
+	}
 
 	// Custom spawn point override (from trigger_start_area + setspawn)
 	if (ent->client->pers.has_custom_spawn)
 	{
 		VectorCopy(ent->client->pers.custom_spawn_origin, spawn_origin);
 		VectorCopy(ent->client->pers.custom_spawn_angles, spawn_angles);
+		use_spawn_velocity = false;
+		VectorClear(spawn_velocity);
 	}
 
 	ent->client->resp.finished = false;
@@ -7432,6 +7450,12 @@ void Kill_Hard(edict_t *ent)
 	client->ps.pmove.origin[0] = spawn_origin[0]*8;
 	client->ps.pmove.origin[1] = spawn_origin[1]*8;
 	client->ps.pmove.origin[2] = spawn_origin[2]*8;
+	if (use_spawn_velocity) {
+		VectorCopy(spawn_velocity, ent->velocity);
+		for (i = 0; i < 3; i++) {
+			client->ps.pmove.velocity[i] = (short)(spawn_velocity[i] * 8.0f);
+		}
+	}
 //ZOID
 	client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
 //ZOID
@@ -8504,6 +8528,9 @@ int RemoveAllItems(void)
 void Overtime_Kill(edict_t *ent)
 {
 	vec3_t	spawn_origin, spawn_angles;
+	vec3_t	spawn_velocity;
+	qboolean	use_spawn_velocity;
+	edict_t	*spawn_spot;
 	gclient_t	*client;
 	int		i;
 	gitem_t		*item;
@@ -8514,7 +8541,19 @@ void Overtime_Kill(edict_t *ent)
 	memset(ent->client->pers.inventory, 0, sizeof(ent->client->pers.inventory));
 	ent->client->Jet_framenum = 0;
 
-	SelectSpawnPoint (ent, spawn_origin, spawn_angles);
+	VectorClear(spawn_velocity);
+	use_spawn_velocity = false;
+	spawn_spot = SelectSpawnPointSpot(ent, spawn_origin, spawn_angles);
+	if (spawn_spot && spawn_spot != ent) {
+		vec3_t forward;
+		VectorCopy(spawn_spot->velocity, spawn_velocity);
+		if (VectorLength(spawn_velocity) < 0.01f && spawn_spot->speed > 0.0f) {
+			AngleVectors(spawn_spot->s.angles, forward, NULL, NULL);
+			VectorScale(forward, spawn_spot->speed, spawn_velocity);
+		}
+		if (VectorLength(spawn_velocity) > 0.01f)
+			use_spawn_velocity = true;
+	}
 	ent->client->resp.finished = false;
 	ent->viewheight = 22;
 	ent->air_finished = level.time + 12;
@@ -8525,6 +8564,12 @@ void Overtime_Kill(edict_t *ent)
 	client->ps.pmove.origin[0] = spawn_origin[0]*8;
 	client->ps.pmove.origin[1] = spawn_origin[1]*8;
 	client->ps.pmove.origin[2] = spawn_origin[2]*8;
+	if (use_spawn_velocity) {
+		VectorCopy(spawn_velocity, ent->velocity);
+		for (i = 0; i < 3; i++) {
+			client->ps.pmove.velocity[i] = (short)(spawn_velocity[i] * 8.0f);
+		}
+	}
 //ZOID
 	client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
 //ZOID

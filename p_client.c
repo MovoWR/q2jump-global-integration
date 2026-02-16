@@ -1024,7 +1024,7 @@ SelectSpawnPoint
 Chooses a player start, deathmatch start, coop start, etc
 ============
 */
-void	SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)
+edict_t *SelectSpawnPointSpot (edict_t *ent, vec3_t origin, vec3_t angles)
 {
 	edict_t	*spot = NULL;
 
@@ -1067,6 +1067,35 @@ void	SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)
 	VectorCopy (spot->s.origin, origin);
 	origin[2] += 9;
 	VectorCopy (spot->s.angles, angles);
+
+	return spot;
+}
+
+void	SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)
+{
+	(void)SelectSpawnPointSpot(ent, origin, angles);
+}
+
+static qboolean CalcSpawnVelocity(edict_t *spawn_spot, vec3_t out)
+{
+	vec3_t forward;
+
+	VectorClear(out);
+	if (!spawn_spot)
+		return false;
+
+	VectorCopy(spawn_spot->velocity, out);
+	if (VectorLength(out) > 0.01f)
+		return true;
+
+	if (spawn_spot->speed > 0.0f) {
+		AngleVectors(spawn_spot->s.angles, forward, NULL, NULL);
+		VectorScale(forward, spawn_spot->speed, out);
+		if (VectorLength(out) > 0.01f)
+			return true;
+	}
+
+	return false;
 }
 
 //======================================================================
@@ -1171,6 +1200,9 @@ void PutClientInServer (edict_t *ent)
 	vec3_t	maxs = {16, 16, 32};
 	int		index;
 	vec3_t	spawn_origin, spawn_angles;
+	vec3_t	spawn_velocity;
+	qboolean	use_spawn_velocity;
+	edict_t	*spawn_spot;
 	gclient_t	*client;
 	int		i;
 	client_persistant_t	saved;
@@ -1196,7 +1228,12 @@ void PutClientInServer (edict_t *ent)
 	// find a spawn point
 	// do it before setting health back up, so farthest
 	// ranging doesn't count this client
-	SelectSpawnPoint (ent, spawn_origin, spawn_angles);
+	spawn_spot = SelectSpawnPointSpot(ent, spawn_origin, spawn_angles);
+	VectorClear(spawn_velocity);
+	use_spawn_velocity = false;
+	if (spawn_spot && spawn_spot != ent) {
+		use_spawn_velocity = CalcSpawnVelocity(spawn_spot, spawn_velocity);
+	}
 
 	//pooy
 	if (gametype->value!=GAME_CTF)
@@ -1207,17 +1244,24 @@ void PutClientInServer (edict_t *ent)
 				ent->client->ps.pmove.delta_angles[i] = ANGLE2SHORT(spawn_angles[i] - ent->client->resp.cmd_angles[i]);
 			VectorCopy(ent->client->resp.store[1].store_pos,spawn_origin);
 			VectorCopy(ent->client->resp.store[1].store_angles,spawn_angles);
+			use_spawn_velocity = false;
+			VectorClear(spawn_velocity);
 		}
 	}
 
-	// Custom spawn point override (from trigger_start_area + setspawn)
-	// Always use custom spawn if set - it overrides store/recall
+	// Custom spawn point override (from trigger_start_area)
 	if (ent->client->pers.has_custom_spawn)
 	{
-		for (i=0 ; i<2 ; i++)
+		qboolean allow_custom = (gset_vars->custom_spawn_enabled == 2) ||
+			(gset_vars->custom_spawn_enabled == 1 && ent->client->resp.ctf_team == CTF_TEAM2);
+		if (allow_custom) {
+			for (i=0 ; i<3 ; i++)
 			ent->client->ps.pmove.delta_angles[i] = ANGLE2SHORT(ent->client->pers.custom_spawn_angles[i] - ent->client->resp.cmd_angles[i]);
 		VectorCopy(ent->client->pers.custom_spawn_origin, spawn_origin);
 		VectorCopy(ent->client->pers.custom_spawn_angles, spawn_angles);
+		use_spawn_velocity = false;
+		VectorClear(spawn_velocity);
+	}
 	}
 
 	ent->client->resp.finished = false;
@@ -1313,6 +1357,12 @@ void PutClientInServer (edict_t *ent)
 	client->ps.pmove.origin[0] = spawn_origin[0]*8;
 	client->ps.pmove.origin[1] = spawn_origin[1]*8;
 	client->ps.pmove.origin[2] = spawn_origin[2]*8;
+	if (use_spawn_velocity) {
+		VectorCopy(spawn_velocity, ent->velocity);
+		for (i = 0; i < 3; i++) {
+			client->ps.pmove.velocity[i] = (short)(spawn_velocity[i] * 8.0f);
+		}
+	}
 //ZOID
 	client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
 //ZOID
@@ -1426,6 +1476,9 @@ void AutoPutClientInServer (edict_t *ent)
 	vec3_t	maxs = {16, 16, 32};
 	int		index;
 	vec3_t	spawn_origin, spawn_angles;
+	vec3_t	spawn_velocity;
+	qboolean	use_spawn_velocity;
+	edict_t	*spawn_spot;
 	gclient_t	*client;
 	int		i;
 	client_persistant_t	saved;
@@ -1436,9 +1489,15 @@ void AutoPutClientInServer (edict_t *ent)
 	if (ent->client->resp.ctf_team==CTF_TEAM2 || (gametype->value==GAME_CTF && ent->client->resp.ctf_team==CTF_TEAM1))
 		pause_client(ent);
 
-	if (gset_vars->overtimetype==OVERTIME_FAST)
-		SelectSpawnPoint (ent, spawn_origin, spawn_angles);
-	else
+	VectorClear(spawn_velocity);
+	use_spawn_velocity = false;
+	spawn_spot = NULL;
+	if (gset_vars->overtimetype==OVERTIME_FAST) {
+		spawn_spot = SelectSpawnPointSpot(ent, spawn_origin, spawn_angles);
+		if (spawn_spot && spawn_spot != ent) {
+			use_spawn_velocity = CalcSpawnVelocity(spawn_spot, spawn_velocity);
+		}
+	} else
 		SelectSpawnPointFromDemo (ent, spawn_origin, spawn_angles);
 	ent->client->resp.finished = false;
 
@@ -1524,6 +1583,12 @@ void AutoPutClientInServer (edict_t *ent)
 	client->ps.pmove.origin[0] = spawn_origin[0]*8;
 	client->ps.pmove.origin[1] = spawn_origin[1]*8;
 	client->ps.pmove.origin[2] = spawn_origin[2]*8;
+	if (use_spawn_velocity) {
+		VectorCopy(spawn_velocity, ent->velocity);
+		for (i = 0; i < 3; i++) {
+			client->ps.pmove.velocity[i] = (short)(spawn_velocity[i] * 8.0f);
+		}
+	}
 //ZOID
 	client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
 //ZOID
@@ -1636,6 +1701,11 @@ void ClientBeginDeathmatch (edict_t *ent)
 
 	InitClientResp (ent->client);
 
+	// Clear custom spawn on map change.
+	ent->client->pers.has_custom_spawn = false;
+	VectorClear(ent->client->pers.custom_spawn_origin);
+	VectorClear(ent->client->pers.custom_spawn_angles);
+
 	// locate ent at a spawn point
 	PutClientInServer (ent);
 
@@ -1711,6 +1781,11 @@ void ClientBegin (edict_t *ent)
 	int		i;
 
 	ent->client = game.clients + (ent - g_edicts - 1);
+
+	// Clear custom spawn on map change.
+	ent->client->pers.has_custom_spawn = false;
+	VectorClear(ent->client->pers.custom_spawn_origin);
+	VectorClear(ent->client->pers.custom_spawn_angles);
 
 	overall_completions[ent-g_edicts-1].loaded = false;
 	compare_users[ent-g_edicts-1].user1.loaded = false;

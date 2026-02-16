@@ -369,6 +369,7 @@ typedef struct
 	edict_t *spinnything;
 	int maptype;
 	edict_t *cpbrushes[MAX_EDICTS];
+	edict_t *start_area;
 } level_locals_t;
 
 
@@ -792,6 +793,7 @@ edict_t	*PlayerTrail_LastSpot (void);
 //
 void respawn (edict_t *ent);
 void BeginIntermission (edict_t *targ);
+edict_t *SelectSpawnPointSpot (edict_t *ent, vec3_t origin, vec3_t angles);
 void PutClientInServer (edict_t *ent);
 void InitClientPersistant (gclient_t *client);
 void InitClientResp (gclient_t *client);
