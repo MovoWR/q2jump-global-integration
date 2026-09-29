@@ -1606,7 +1606,7 @@ void ShowCurrentMaplist(edict_t *ent,int offset)
    { 	   
 	   if (maplist.times[i][0].uid>=0)
 	   {
-		  Com_sprintf(name,sizeof(name),maplist.users[maplist.times[i][0].uid].name);
+		  Com_sprintf(name,sizeof(name),"%s",maplist.users[maplist.times[i][0].uid].name);
 		  Highlight_Name(name);
   		  gi.cprintf (ent, PRINT_HIGH, "%-3d %5s %-20s %-16s %8.3f\n", i+1, map_skill[maplist.skill[i]],maplist.mapnames[i],name,maplist.times[i][0].time);
 	   }
@@ -2033,7 +2033,7 @@ def:
 					time = maplist.times[mapnum][0].time - maplist.times[mapnum][i].time;
 				else
 					time = maplist.times[mapnum][i].time;				
-			  Com_sprintf(name,sizeof(name),maplist.users[maplist.times[mapnum][i].uid].name);
+			  Com_sprintf(name,sizeof(name), "%s", maplist.users[maplist.times[mapnum][i].uid].name);
 			  Highlight_Name(name);
               gi.cprintf (ent, PRINT_HIGH, "%-3d %-18s   %s  %8.3f %9.3f\n",i+1,name,maplist.times[mapnum][i].date,time,maplist.times[mapnum][i].time);
 			}
@@ -2078,7 +2078,7 @@ void ShowPlayerTimes(edict_t *ent)
 	  temp = maplist.sorted_users[i].uid;
 	  if (temp>=0)
 	  {
-		  Com_sprintf(name,sizeof(name),maplist.users[temp].name);
+		  Com_sprintf(name,sizeof(name), "%s", maplist.users[temp].name);
 		  Com_sprintf(txt,sizeof(txt),"%-3d %-16s %3d %3d %3d %3d %3d %3d %3d %3d %3d  %3d  %3d  %3d  %3d  %3d  %3d %5d", i+1, name,maplist.users[temp].points[0],maplist.users[temp].points[1],maplist.users[temp].points[2],maplist.users[temp].points[3],
 			  maplist.users[temp].points[4],maplist.users[temp].points[5],maplist.users[temp].points[6],maplist.users[temp].points[7],maplist.users[temp].points[8],maplist.users[temp].points[9],maplist.users[temp].points[10],maplist.users[temp].points[11],maplist.users[temp].points[12],maplist.users[temp].points[13],maplist.users[temp].points[14],maplist.users[temp].score);
 ///		  Highlight_Name(name);
@@ -2120,7 +2120,7 @@ void ShowPlayerScores(edict_t *ent)
 	  temp = maplist.sorted_israfel[i].uid;
 	  if (temp>=0)
 	  {
-		  Com_sprintf(name,sizeof(name),maplist.users[temp].name);
+		  Com_sprintf(name,sizeof(name), "%s", maplist.users[temp].name);
 		  //Highlight_Name(name);
 		  Com_sprintf(txt,sizeof(txt),"%-3d %-16s %3d %3d %3d %3d %3d %3d %3d %3d %3d  %3d  %3d  %3d  %3d  %3d  %3d %4.1f%%", i+1, name,maplist.users[temp].points[0],maplist.users[temp].points[1],maplist.users[temp].points[2],maplist.users[temp].points[3],
 			  maplist.users[temp].points[4],maplist.users[temp].points[5],maplist.users[temp].points[6],maplist.users[temp].points[7],maplist.users[temp].points[8],maplist.users[temp].points[9],maplist.users[temp].points[10],maplist.users[temp].points[11],maplist.users[temp].points[12],maplist.users[temp].points[13],maplist.users[temp].points[14],
@@ -2160,7 +2160,7 @@ void ShowPlayerMaps(edict_t *ent)
 	  temp = maplist.sorted_completions[i].uid;
 	  if (temp>=0)
 	  {
-		  Com_sprintf(name,sizeof(name),maplist.users[temp].name);
+		  Com_sprintf(name,sizeof(name), "%s", maplist.users[temp].name);
 //		  Highlight_Name(name);
 		Com_sprintf(txt,sizeof(txt),"%-3d %-16s   %4d  %3.1f", i+1, name,maplist.users[temp].completions,(float)maplist.users[temp].completions / (float)maplist.nummaps * 100);
 		  if (Can_highlight_Name(name))
@@ -2892,7 +2892,7 @@ void list_admins(edict_t *ent)
 		   gi.cprintf (ent, PRINT_HIGH, "%-3d %-16s\n", i+1, va("ACCESS DENIED"));
 		   continue;
 	   }
-	  Com_sprintf(name,sizeof(name),admin_pass[i].name);
+	  Com_sprintf(name,sizeof(name), "%s", admin_pass[i].name);
 	  Highlight_Name(name);
       gi.cprintf (ent, PRINT_HIGH, "%-3d %-16s %-16s %-1d \n", i+1, name,admin_pass[i].password,admin_pass[i].level);
 	  //num++;
@@ -2912,67 +2912,167 @@ void Cmd_Commands_f (edict_t *ent)
 
 }
 
-void Cmd_Store_f (edict_t *ent) {
+void Cmd_Store_f(edict_t *ent)
+{ // REPLAY STORE!!
 	int i;
 	// set default to false
 	qboolean can_store = false;
 
 	// check for ctf
-	if (gametype->value==GAME_CTF)
+	if (gametype->value == GAME_CTF)
 		return;
 
-	// are we on a team?
-	if ((ent->client->resp.ctf_team==CTF_TEAM1) || (ent->client->resp.ctf_team==CTF_TEAM2)) {
+	// Check if we're in replay mode and replay storing is enabled (allow for any team)
+	if (ent->client->resp.replaying && ent->client->resp.replaying <= MAX_HIGHSCORES + MAX_REMOTE_REPLAYS)
+	{
+		int replay_idx = ent->client->resp.replaying - 1;
+		int frame = (int)ent->client->resp.replay_frame;
+
+		// Validate replay data exists
+		if (frame >= 0 && frame < level_items.recorded_time_frames[replay_idx] &&
+			level_items.recorded_time_frames[replay_idx] > 0)
+		{
+
+			// Use replay data for store - skip team check and go directly to store logic
+			can_store = true;
+			// gi.cprintf(ent, PRINT_HIGH, "Storing from replay frame %d (%.1f seconds)\n", frame, (float)frame / 10.0f);
+		}
+		else
+		{
+			gi.cprintf(ent, PRINT_HIGH, "Cannot store: invalid replay frame\n");
+			return;
+		}
+	}
+	// Normal team check for non-replay store
+	else if ((ent->client->resp.ctf_team == CTF_TEAM1) || (ent->client->resp.ctf_team == CTF_TEAM2))
+	{
 
 		// can we store in the air?
-		if (gset_vars->store_safe) {
+		if (gset_vars->store_safe)
+		{
 			if (ent->client->ps.pmove.pm_flags & PMF_ON_GROUND)
 				can_store = true;
-		} else
-			can_store = true;
-
-		// can we store?
-		if (can_store) {
-			for (i = MAX_STORES-1; i >= 1; i--) {
-				ent->client->resp.store[i] = ent->client->resp.store[i-1]; //move old stores +1
-			}
-			ent->client->resp.store[1].stored_item_timer = ent->client->resp.item_timer;
-			ent->client->resp.store[1].stored_finished = ent->client->resp.finished;
-			VectorCopy(ent->s.origin,ent->client->resp.store[1].store_pos);
-			VectorCopy(ent->s.angles,ent->client->resp.store[1].store_angles);
-			ent->client->resp.store[1].store_angles[2] = 0;
-			ent->client->resp.store[1].stored = true;
-			ent->client->resp.can_store = true;
-			//velocity store feature 
-			//we always store velocity so it can be ready when toggled on
-			VectorCopy(ent->velocity, ent->client->resp.store[1].stored_velocity);
-			
-
-			if (jump_show_stored_ent) {
-				if (ent->client->resp.stored_ent)	
-					G_FreeEdict(ent->client->resp.stored_ent);
-
-				ent->client->resp.stored_ent = G_Spawn();
-				VectorCopy (ent->client->resp.store[1].store_pos, ent->client->resp.stored_ent->s.origin);
-				VectorCopy (ent->client->resp.store[1].store_pos, ent->client->resp.stored_ent->s.old_origin);
-				ent->client->resp.stored_ent->s.old_origin[2] -=10;
-				ent->client->resp.stored_ent->s.origin[2] -=10;
-				ent->client->resp.stored_ent->svflags = SVF_PROJECTILE;
-				VectorCopy(ent->client->resp.store[1].store_angles, ent->client->resp.stored_ent->s.angles);
-				ent->client->resp.stored_ent->movetype = MOVETYPE_NONE;
-				ent->client->resp.stored_ent->clipmask = MASK_PLAYERSOLID;
-				ent->client->resp.stored_ent->solid = SOLID_NOT;
-				ent->client->resp.stored_ent->s.renderfx = RF_TRANSLUCENT;
-				VectorClear (ent->client->resp.stored_ent->mins);
-				VectorClear (ent->client->resp.stored_ent->maxs);
-				ent->client->resp.stored_ent->s.modelindex = gi.modelindex (gset_vars->model_store);
-				ent->client->resp.stored_ent->dmg = 0;
-				ent->client->resp.stored_ent->classname = "stored_ent";
-				gi.linkentity (ent->client->resp.stored_ent);
-
-			} else
-				gi.cprintf(ent,PRINT_HIGH,"Can only store on ground\n");
 		}
+		else
+			can_store = true;
+	}
+	else if (!ent->client->resp.replaying)
+	{
+		// Player not on a team and not in replay mode (or replay store disabled)
+		gi.cprintf(ent, PRINT_HIGH, "You must be on a team to use store\n");
+		return;
+	}
+
+	// Execute store if allowed
+	if (can_store)
+	{
+		for (i = MAX_STORES - 1; i >= 1; i--)
+		{
+			ent->client->resp.store[i] = ent->client->resp.store[i - 1]; // move old stores +1
+		}
+		// Basic state
+		ent->client->resp.store[1].stored_item_timer = ent->client->resp.item_timer;
+		ent->client->resp.store[1].stored_finished = ent->client->resp.finished;
+		VectorCopy(ent->s.origin, ent->client->resp.store[1].store_pos);
+		VectorCopy(ent->s.angles, ent->client->resp.store[1].store_angles);
+		ent->client->resp.store[1].store_angles[2] = 0;
+		ent->client->resp.store[1].stored = true;
+		ent->client->resp.can_store = true;
+		// velocity store feature
+		// we always store velocity so it can be ready when toggled on
+		VectorCopy(ent->velocity, ent->client->resp.store[1].stored_velocity);
+
+		ent->client->resp.store[1].checkpoints = ent->client->resp.store[0].checkpoints;
+		ent->client->resp.store[1].red_checkpoint = ent->client->resp.store[0].red_checkpoint;
+		ent->client->resp.store[1].target_checkpoint = ent->client->resp.store[0].target_checkpoint;
+		ent->client->resp.store[1].blue_checkpoint = ent->client->resp.store[0].blue_checkpoint;
+		ent->client->resp.store[1].cd_checkpoint = ent->client->resp.store[0].cd_checkpoint;
+		ent->client->resp.store[1].cube_checkpoint = ent->client->resp.store[0].cube_checkpoint;
+		ent->client->resp.store[1].pyramid_checkpoint = ent->client->resp.store[0].pyramid_checkpoint;
+		ent->client->resp.store[1].pass_checkpoint = ent->client->resp.store[0].pass_checkpoint;
+		ent->client->resp.store[1].spinner_checkpoint = ent->client->resp.store[0].spinner_checkpoint;
+		ent->client->resp.store[1].rs1_checkpoint = ent->client->resp.store[0].rs1_checkpoint;
+		ent->client->resp.store[1].rs2_checkpoint = ent->client->resp.store[0].rs2_checkpoint;
+		ent->client->resp.store[1].rs3_checkpoint = ent->client->resp.store[0].rs3_checkpoint;
+		ent->client->resp.store[1].rs4_checkpoint = ent->client->resp.store[0].rs4_checkpoint;
+		ent->client->resp.store[1].rs5_checkpoint = ent->client->resp.store[0].rs5_checkpoint;
+		for (i = 0; i < 64; i++)
+		{
+			ent->client->resp.store[1].cpbox_checkpoint[i] = ent->client->resp.store[0].cpbox_checkpoint[i];
+		}
+
+		if (jump_show_stored_ent)
+		{
+			if (ent->client->resp.stored_ent)
+				G_FreeEdict(ent->client->resp.stored_ent);
+
+			ent->client->resp.stored_ent = G_Spawn();
+			VectorCopy(ent->client->resp.store[1].store_pos, ent->client->resp.stored_ent->s.origin);
+			VectorCopy(ent->client->resp.store[1].store_pos, ent->client->resp.stored_ent->s.old_origin);
+			ent->client->resp.stored_ent->s.old_origin[2] -= 10;
+			ent->client->resp.stored_ent->s.origin[2] -= 10;
+			ent->client->resp.stored_ent->svflags = SVF_PROJECTILE;
+			VectorCopy(ent->client->resp.store[1].store_angles, ent->client->resp.stored_ent->s.angles);
+			ent->client->resp.stored_ent->movetype = MOVETYPE_NONE;
+			ent->client->resp.stored_ent->clipmask = MASK_PLAYERSOLID;
+			ent->client->resp.stored_ent->solid = SOLID_NOT;
+			ent->client->resp.stored_ent->s.renderfx = RF_TRANSLUCENT;
+			VectorClear(ent->client->resp.stored_ent->mins);
+			VectorClear(ent->client->resp.stored_ent->maxs);
+			ent->client->resp.stored_ent->s.modelindex = gi.modelindex(gset_vars->model_store);
+			ent->client->resp.stored_ent->dmg = 0;
+			ent->client->resp.stored_ent->classname = "stored_ent";
+			gi.linkentity(ent->client->resp.stored_ent);
+		}
+	}
+	else if (!ent->client->resp.replaying)
+	{
+		// Only show "can only store on ground" for non-replay cases
+		gi.cprintf(ent, PRINT_HIGH, "Can only store on ground\n");
+	}
+
+	// Handle replay store data extraction if in replay mode
+	if (ent->client->resp.replaying && can_store)
+	{
+		int replay_idx = ent->client->resp.replaying - 1;
+		int frame = (int)ent->client->resp.replay_frame;
+
+		// Check if this replay is in v2 format
+
+		// Use v1 format data (legacy)
+		ent->client->resp.store[1].stored_item_timer = (float)frame / 10.0f; // Convert frame to seconds
+		VectorCopy(level_items.recorded_time_data[replay_idx][frame].origin, ent->client->resp.store[1].store_pos);
+		VectorCopy(level_items.recorded_time_data[replay_idx][frame].angle, ent->client->resp.store[1].store_angles);
+		ent->client->resp.store[1].store_angles[2] = 0;
+		ent->client->resp.store[1].stored_finished = false;
+
+		// Calculate velocity from frame differences (if possible)
+		if (frame > 0 && frame < level_items.recorded_time_frames[replay_idx] - 1)
+		{
+			vec3_t prev_pos, next_pos, velocity_calc;
+			VectorCopy(level_items.recorded_time_data[replay_idx][frame - 1].origin, prev_pos);
+			VectorCopy(level_items.recorded_time_data[replay_idx][frame + 1].origin, next_pos);
+			VectorSubtract(next_pos, prev_pos, velocity_calc);
+			VectorScale(velocity_calc, 5.0f, ent->client->resp.store[1].stored_velocity); // 2 frames = 0.2 sec, so *5 for units/sec
+		}
+		else
+		{
+			VectorClear(ent->client->resp.store[1].stored_velocity); // No velocity data available
+		}
+		// gi.cprintf(ent, PRINT_HIGH, "Stored replay position at %.1fs (calculated velocity)\n",(float)frame / 10.0f);
+		gi.cprintf(ent, PRINT_HIGH, "Stored from replay frame %d (%.1f seconds)\n", (frame + 1), (float)frame / 10.0f);
+
+		// Copy checkpoint and lap data
+
+		// Fallback to player's current state
+		ent->client->resp.store[1].checkpoints = ent->client->resp.store[0].checkpoints;
+		ent->client->resp.store[1].spinner_checkpoint = ent->client->resp.store[0].spinner_checkpoint;
+		ent->client->resp.store[1].rs1_checkpoint = ent->client->resp.store[0].rs1_checkpoint;
+		ent->client->resp.store[1].rs2_checkpoint = ent->client->resp.store[0].rs2_checkpoint;
+		ent->client->resp.store[1].rs3_checkpoint = ent->client->resp.store[0].rs3_checkpoint;
+		ent->client->resp.store[1].rs4_checkpoint = ent->client->resp.store[0].rs4_checkpoint;
+		ent->client->resp.store[1].rs5_checkpoint = ent->client->resp.store[0].rs5_checkpoint;
+		memcpy(ent->client->resp.store[1].cpbox_checkpoint, ent->client->resp.store[0].cpbox_checkpoint, sizeof(ent->client->resp.store[0].cpbox_checkpoint));
 	}
 }
 
@@ -4044,7 +4144,7 @@ int GetPlayerUid_NoAdd(char *name)
 	int i;
 	int len;
 	char temp_name[255];
-	Com_sprintf(temp_name,sizeof(temp_name),name);
+	Com_sprintf(temp_name,sizeof(temp_name), "%s", name);
 	len = strlen(temp_name);
 	for (i=0;i<len;i++)
 	{
@@ -11662,7 +11762,7 @@ void list_mapsleft(edict_t *ent)
 				{
 				   if (maplist.times[i2][0].uid>=0)
 				   {
-					  Com_sprintf(name,sizeof(name),maplist.users[maplist.times[i2][0].uid].name);
+					  Com_sprintf(name,sizeof(name), "%s", maplist.users[maplist.times[i2][0].uid].name);
 					  Highlight_Name(name);
   					  gi.cprintf (ent, PRINT_HIGH, "%-3d %5s %-20s %-16s %8.3f\n", i+1,map_skill[maplist.skill[i2]],
 						  maplist.mapnames[i2],name,
@@ -11733,7 +11833,7 @@ void list_mapsdone(edict_t *ent)
 				{
 				   if (maplist.times[i2][0].uid>=0)
 				   {
-					  Com_sprintf(name,sizeof(name),maplist.users[maplist.times[i2][0].uid].name);
+					  Com_sprintf(name,sizeof(name), "%s", maplist.users[maplist.times[i2][0].uid].name);
 					  Highlight_Name(name);
   					  gi.cprintf (ent, PRINT_HIGH, "%-3d %5s %-20s %-16s %8.3f\n", i+1,map_skill[maplist.skill[i2]],
 						  maplist.mapnames[i2],name,
@@ -13303,7 +13403,7 @@ void Lastseen_Command(edict_t *ent)
 	  temp = maplist.sorted_completions[i].uid;
 	  if (temp>=0)
 	  {
-		  Com_sprintf(name,sizeof(name),maplist.users[temp].name);
+		  Com_sprintf(name,sizeof(name), "%s", maplist.users[temp].name);
 		if (maplist.users[temp].lastseen)
 		{
 			diff = timenow - maplist.users[temp].lastseen;
@@ -13472,7 +13572,7 @@ void ShowCurrentVotelist(edict_t *ent,int offset)
 	   mapnum = votemaplist[i];
 	   if (maplist.times[mapnum][0].uid>=0)
 	   {
-		  Com_sprintf(name,sizeof(name),maplist.users[maplist.times[mapnum][0].uid].name);
+		  Com_sprintf(name,sizeof(name), "%s", maplist.users[maplist.times[mapnum][0].uid].name);
 		  Highlight_Name(name);
   		  gi.cprintf (ent, PRINT_HIGH, "%-3d %5s %-20s %5d times\n", i+1, map_skill[maplist.skill[mapnum]],maplist.mapnames[mapnum],maplist.update[mapnum]);
 	   }
@@ -14138,7 +14238,7 @@ void Cmd_1st(edict_t *ent)
 			  done++;
 			  if (done<start)
 				  continue;
-			  Com_sprintf(name,sizeof(name),maplist.users[maplist.times[i][0].uid].name);
+			  Com_sprintf(name,sizeof(name),"%s",maplist.users[maplist.times[i][0].uid].name);
 			  Highlight_Name(name);
   			  gi.cprintf (ent, PRINT_HIGH, "%-2i %5s %-20s %-16s %-8.3f\n",done,map_skill[maplist.skill[i]],maplist.mapnames[i],name,maplist.times[i][0].time);
 			}
@@ -14169,8 +14269,8 @@ void Changename(edict_t *ent)
 		gi.cprintf(ent,PRINT_HIGH,"format: changename orig_name new_name\nWarning: Any name change will force the current map to be reloaded.\n");
 		return;
 	}
-	Com_sprintf(origname,sizeof(origname),gi.argv(1));
-	Com_sprintf(newname,sizeof(newname),gi.argv(2));
+	Com_sprintf(origname,sizeof(origname), "%s", gi.argv(1));
+	Com_sprintf(newname,sizeof(newname), "%s", gi.argv(2));
 	origid = GetPlayerUid_NoAdd(origname);
 	newid = GetPlayerUid_NoAdd(newname);
 	if (origid<0)
@@ -14320,8 +14420,8 @@ void Cmd_Stats(edict_t *ent)
 			{
 				done++;
 				if (done<start)
-					continue;
-				Com_sprintf(name,sizeof(name),maplist.users[maplist.times[i][0].uid].name);
+					continue;				
+				Com_sprintf(name,sizeof(name),"%s",maplist.users[maplist.times[i][0].uid].name);
 				Highlight_Name(name);
 				gi.cprintf (ent, PRINT_HIGH, "%-3i %5s %-20s %-16s%8.3f  %8.3f\n",done,map_skill[maplist.skill[i]],maplist.mapnames[i],name,maplist.times[i][0].time,maplist.times[i][points].time);
 			}
