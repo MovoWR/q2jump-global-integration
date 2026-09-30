@@ -3081,13 +3081,13 @@ void Cmd_Time_f (edict_t *ent)
 	switch (level.status)
 	{
 	case 0 :
-		gi.cprintf (ent, PRINT_HIGH, "Time remaining %02d:%02d.\n",(int)((int)(((mset_vars->timelimit*60)+(map_added_time*60))-level.time)/60),(int)((int)(((mset_vars->timelimit*60)+(map_added_time*60))-level.time)%60));
+		gi.cprintf (ent, PRINT_HIGH, "Time remaining %02d:%02d.\n",(int)G_MapTimeRemaining()/60,(int)G_MapTimeRemaining()%60);
 	break;
 	case LEVEL_STATUS_OVERTIME :
-			gi.cprintf (ent, PRINT_HIGH, "Time remaining %02d:%02d.\n",(int)((int)((gset_vars->overtimelimit*60)+gset_vars->overtimewait-level.time)/60),(int)((int)((gset_vars->overtimelimit*60)+gset_vars->overtimewait-level.time)%60));
+			gi.cprintf (ent, PRINT_HIGH, "Time remaining %02d:%02d.\n",(int)((int)((gset_vars->overtimelimit*60)+gset_vars->overtimewait-G_MapTime())/60),(int)((int)((gset_vars->overtimelimit*60)+gset_vars->overtimewait-G_MapTime())%60));
 	break;
 	case LEVEL_STATUS_VOTING :
-			gi.cprintf (ent, PRINT_HIGH, "Time remaining %02d.\n",(int)(gset_vars->votingtime-level.time));
+			gi.cprintf (ent, PRINT_HIGH, "Time remaining %02d.\n",(int)(gset_vars->votingtime-G_MapTime()));
 	break;
 	}
 }
@@ -3565,15 +3565,15 @@ void CTFSilence(edict_t *ent)
 	}
 
 	if (ent->client->resp.admin < aset_vars->ADMIN_VOTE_LEVEL)
-	if ((mset_vars->timelimit*60)+(map_added_time*60)-level.time<120)
+	if (G_MapTimeRemaining()<120)
 	{
 		gi.cprintf(ent,PRINT_HIGH,"You cannot initiate a vote of this kind when timeleft is under 2 minutes\n");
 		return;
 	}
 
-	if ((level.time<20) && (ent->client->resp.admin<aset_vars->ADMIN_SILENCE_LEVEL))
+	if ((G_MapTime()<20) && (ent->client->resp.admin<aset_vars->ADMIN_SILENCE_LEVEL))
 	{
-		gi.cprintf(ent,PRINT_HIGH,"Please wait %2.1f seconds before calling a vote\n",20.0-level.time);
+		gi.cprintf(ent,PRINT_HIGH,"Please wait %2.1f seconds before calling a vote\n",20.0-G_MapTime());
 		return;
 	}
 
@@ -3693,7 +3693,7 @@ void CTFRand(edict_t *ent)
 	}
 
 	if (ent->client->resp.admin < aset_vars->ADMIN_VOTE_LEVEL)
-	if ((mset_vars->timelimit*60)+(map_added_time*60)-level.time<120)
+	if (G_MapTimeRemaining()<120)
 	{
 		if (Get_Voting_Clients()>1)
 		{
@@ -3702,7 +3702,7 @@ void CTFRand(edict_t *ent)
 		}
 	}
 
-	if ((gset_vars->nomapvotetime >= level.time) && (ent->client->resp.admin<aset_vars->ADMIN_VOTE_LEVEL) && curclients > 2) // 0.84wp_h1
+	if ((gset_vars->nomapvotetime >= G_MapTime()) && (ent->client->resp.admin<aset_vars->ADMIN_VOTE_LEVEL) && curclients > 2) // 0.84wp_h1
 	{
 		gi.cprintf(ent,PRINT_HIGH,"Votes have been disabled for the first %d seconds of a map.\n",gset_vars->nomapvotetime);
 		return;
@@ -3765,7 +3765,7 @@ void CTFNominate(edict_t *ent)
 		return;
 	}
 	if (ent->client->resp.admin < aset_vars->ADMIN_VOTE_LEVEL)
-	if ((mset_vars->timelimit*60)+(map_added_time*60)-level.time<120)
+	if (G_MapTimeRemaining()<120)
 	{
 		if (Get_Voting_Clients()>1)
 		{
@@ -3782,7 +3782,7 @@ void CTFNominate(edict_t *ent)
 
 	index = ent-g_edicts-1;
 
-	if ((gset_vars->nomapvotetime >= level.time) && (ent->client->resp.admin<aset_vars->ADMIN_VOTE_LEVEL) && curclients > 2) // 0.84wp_h1
+	if ((gset_vars->nomapvotetime >= G_MapTime()) && (ent->client->resp.admin<aset_vars->ADMIN_VOTE_LEVEL) && curclients > 2) // 0.84wp_h1
 	{
 		gi.cprintf(ent,PRINT_HIGH,"Votes have been disabled for the first %d seconds of a map.\n",gset_vars->nomapvotetime);
 		return;
@@ -4328,7 +4328,7 @@ void Jet_ApplyLifting( edict_t *ent )
   float		amplitude = 2.0;
 
   /*calculate the z-distance to lift in this step*/
-  delta = sin( (float)((level.framenum%time)*(360/time))/180*M_PI ) * amplitude;
+  delta = sin( (float)(((level.framenum-map_hold_frames)%time)*(360/time))/180*M_PI ) * amplitude;
   delta = (float)((int)(delta*8))/8; /*round to multiples of 0.125*/
 
   VectorCopy( ent->s.origin, new_origin );
@@ -8712,7 +8712,7 @@ int CheckOverTimeRules(void)
 	}
 	
 
-	if (level.framenum & 31)
+	if ((level.framenum - map_hold_frames) & 31)
 		return 0;
 	for (i=0 ; i<maxclients->value ; i++)
 	{
@@ -8763,7 +8763,7 @@ int CheckOverTimeLastManRules(void)
 	}
 	
 
-	if (level.framenum & 31)
+	if ((level.framenum - map_hold_frames) & 31)
 		return -1;
 	for (i=0 ; i<maxclients->value ; i++)
 	{
@@ -10127,10 +10127,10 @@ void Add_Time(edict_t *ent)
 	else
 		gi.bprintf(PRINT_HIGH, "%i minutes added (%i total time added)\n", i, map_added_time);
 
-	timeleft = ((int)(level.time / 60)) + (mset_vars->timelimit + map_added_time);
+	timeleft = ((int)(G_MapTime() / 60)) + (mset_vars->timelimit + map_added_time);
 	if (timeleft < 0)
 	{
-		gi.bprintf(PRINT_HIGH,"%d\n",((int)(level.time / 60)) + (mset_vars->timelimit + map_added_time));
+		gi.bprintf(PRINT_HIGH,"%d\n",((int)(G_MapTime() / 60)) + (mset_vars->timelimit + map_added_time));
 		End_Jumping();
 		return;
 	}
@@ -11059,14 +11059,14 @@ void CTFVoteTime(edict_t *ent)
 	if (ent->client->resp.silence)
 		return;
 
-	if ((level.time<20) && (ent->client->resp.admin<aset_vars->ADMIN_ADDTIME_LEVEL) && curclients > 2) // hannibal
+	if ((G_MapTime()<20) && (ent->client->resp.admin<aset_vars->ADMIN_ADDTIME_LEVEL) && curclients > 2) // hannibal
 	{
-		gi.cprintf(ent,PRINT_HIGH,"Please wait %2.1f seconds before calling a vote\n",20.0-level.time);
+		gi.cprintf(ent,PRINT_HIGH,"Please wait %2.1f seconds before calling a vote\n",20.0-G_MapTime());
 		return;
 	}
 
 
-	if ((ent->client->resp.admin<aset_vars->ADMIN_ADDTIME_LEVEL) && gset_vars->notimevotetime >= level.time && curclients > 2)
+	if ((ent->client->resp.admin<aset_vars->ADMIN_ADDTIME_LEVEL) && gset_vars->notimevotetime >= G_MapTime() && curclients > 2)
 	{
 		gi.cprintf(ent,PRINT_HIGH,"Votes have been disabled for the first %d seconds of a map.\n",gset_vars->notimevotetime);
 		return;

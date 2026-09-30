@@ -631,6 +631,7 @@ void SpawnEntities (char *mapname, char *entities, char *spawnpoint)
 	}
 	//reset added time
 	map_added_time = 0;
+	map_hold_frames = 0;
 	map_allow_voting = true;
 	level_items.locked = false;
 

@@ -843,8 +843,17 @@ void M_ChangeYaw (edict_t *ent);
 void G_RunEntity (edict_t *ent);
 
 //
+// g_func.c
+//
+void Move_DelayThink (edict_t *ent);
+
+//
 // g_main.c
 //
+extern int map_hold_frames;
+void G_AdvanceTime (void);
+float G_MapTime (void);
+float G_MapTimeRemaining (void);
 void SaveClientData (void);
 void FetchClientEntData (edict_t *ent);
 void EndDMLevel (void);

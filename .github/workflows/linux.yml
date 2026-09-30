@@ -2,7 +2,7 @@ name: Build & Deploy Linux x86_64
 
 on:
   push:
-    branches: [1.49global]
+    branches: [main]
   release:
     types: [created]
 
@@ -10,7 +10,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     env:
-      WORKDIR: src
+      WORKDIR: .
       BUILD_DIR: release
       LIB_NAME: gamex86_64.so
     steps:
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ hashFiles('**/*.c', '**/*.h', '**/Makefile') }}
+          key: ccache-${{ runner.os }}-${{ hashFiles('**/*.c', '**/*.h', 'makefile') }}
           restore-keys: |
             ccache-${{ runner.os }}-
 
@@ -39,10 +39,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export CC="ccache gcc"
           make clean
           make prep
-          make -j"$(nproc)" release
+          # Legacy header globals need -fcommon with modern GCC.
+          make -j"$(nproc)" CC="ccache gcc -fcommon" release
           test -f "${BUILD_DIR}/${LIB_NAME}"
           strip --strip-unneeded "${BUILD_DIR}/${LIB_NAME}"
           ls -lh "${BUILD_DIR}/"
