@@ -2302,6 +2302,7 @@ void WriteEnts(void)
 	char	name[256];
 	int i;
 	qboolean first_line;
+	qboolean player_spawn;
 	cvar_t	*tgame;
 
 	tgame = gi.cvar("game", "", 0);
@@ -2315,6 +2316,7 @@ void WriteEnts(void)
 	for (i=0;i<MAX_ENTS;i++)
 	if (level_items.ents[i])
 	{
+		player_spawn = !strncmp(level_items.ents[i]->classname, "info_player_", 12);
 		wrote = true;
 		if (!first_line)
 		{
@@ -2342,7 +2344,16 @@ void WriteEnts(void)
 		}
 
 		fprintf (f, "\"origin\" \"%f %f %f\"\n",level_items.ents[i]->s.origin[0],level_items.ents[i]->s.origin[1],level_items.ents[i]->s.origin[2]);
-        if (level_items.ents[i]->s.angles[0]){
+		if (player_spawn)
+		{
+			if (!VectorCompare(level_items.ents[i]->velocity, vec3_origin))
+				fprintf (f, "\"velocity\" \"%.9g %.9g %.9g\"\n", level_items.ents[i]->velocity[0], level_items.ents[i]->velocity[1], level_items.ents[i]->velocity[2]);
+			if (level_items.ents[i]->speed)
+				fprintf (f, "\"speed\" \"%.9g\"\n", level_items.ents[i]->speed);
+			if (!VectorCompare(level_items.ents[i]->s.angles, vec3_origin))
+				fprintf (f, "\"angles\" \"%.9g %.9g %.9g\"\n", level_items.ents[i]->s.angles[0], level_items.ents[i]->s.angles[1], level_items.ents[i]->s.angles[2]);
+		}
+        else if (level_items.ents[i]->s.angles[0]){
 		    fprintf (f, "\"angles\" \"%f %f %f\"\n",level_items.ents[i]->s.angles[0],level_items.ents[i]->s.angles[1],level_items.ents[i]->s.angles[2]);
         }
         if (level_items.ents[i]->target)
@@ -7403,9 +7414,20 @@ void Apply_Paused_Details(edict_t *ent)
 	ent->client->ps.pmove.pm_type = PM_FREEZE;*/
 }
 
+static void StoreSpawnPoint(edict_t *ent)
+{
+	// Grounding a launch spawn can cancel its velocity before movement starts.
+	if (VectorCompare(ent->velocity, vec3_origin))
+		M_droptofloor(ent);
+	Cmd_Store_f(ent);
+}
+
 void Kill_Hard(edict_t *ent)
 {
 	vec3_t	spawn_origin, spawn_angles;
+	vec3_t	spawn_velocity;
+	qboolean	use_spawn_velocity;
+	edict_t	*spawn_spot;
 	gclient_t	*client;
 	int		i;
 	gitem_t		*item;
@@ -7426,17 +7448,29 @@ void Kill_Hard(edict_t *ent)
 	memset(ent->client->pers.inventory, 0, sizeof(ent->client->pers.inventory));
 	ent->client->Jet_framenum = 0;
 
-	SelectSpawnPoint (ent, spawn_origin, spawn_angles);
+	VectorClear (spawn_velocity);
+	use_spawn_velocity = false;
+	spawn_spot = SelectSpawnPointSpot (ent, spawn_origin, spawn_angles);
+	if (spawn_spot && spawn_spot != ent)
+		use_spawn_velocity = CalcSpawnVelocity (spawn_spot, spawn_velocity);
 	ent->client->resp.finished = false;
 	ent->viewheight = 22;
 	ent->air_finished = level.time + 12;
 	ent->waterlevel = 0;
 	ent->watertype = 0;
 	VectorClear (ent->velocity);
+	VectorClear (client->ps.pmove.velocity);
 
 	client->ps.pmove.origin[0] = spawn_origin[0]*8;
 	client->ps.pmove.origin[1] = spawn_origin[1]*8;
 	client->ps.pmove.origin[2] = spawn_origin[2]*8;
+	if (use_spawn_velocity)
+	{
+		ent->groundentity = NULL;
+		VectorCopy (spawn_velocity, ent->velocity);
+		for (i=0 ; i<3 ; i++)
+			client->ps.pmove.velocity[i] = (short)(spawn_velocity[i] * 8.0f);
+	}
 //ZOID
 	client->ps.pmove.pm_flags &= ~PMF_NO_PREDICTION;
 //ZOID
@@ -7520,8 +7554,7 @@ ent->client->resp.replay_speed = REPLAY_SPEED_ONE;
 	KillMyRox(ent);
 
 	if (mset_vars->ezmode == 1) { // force a store, so they cant cheat
-        M_droptofloor(ent);
-        Cmd_Store_f(ent);
+        StoreSpawnPoint(ent);
 		ent->client->pers.total_recall = 0; // reset recall count
 	}
 
@@ -8033,14 +8066,12 @@ void Notify_Of_Team_Commands(edict_t *ent)
 	if (ent->client->resp.ctf_team==CTF_TEAM1) {
 		gi.cprintf(ent,PRINT_HIGH,"Team Easy: Use the commands store and recall to practice jumps.\n");
 		if (!ent->client->resp.can_store) { // this only happens if a person has not placed a store
-			M_droptofloor(ent); // drop them to the floor in case spawn is raised
-			Cmd_Store_f(ent);
+			StoreSpawnPoint(ent);
 		}
 	}
 	else if (ent->client->resp.ctf_team==CTF_TEAM2) {
 		if (mset_vars->ezmode == 1) { // force a store, so they cant cheat
-			M_droptofloor(ent);
-			Cmd_Store_f(ent);
+			StoreSpawnPoint(ent);
 			ent->client->pers.total_recall = 0; // reset recall count
 			gi.cprintf(ent,PRINT_HIGH,"Ez Mode: Hard mode... with teles.\n");
 		} else
